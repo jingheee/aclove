@@ -1,0 +1,14 @@
+app:
+  host: "0.0.0.0"
+  port: 8080
+
+database:
+  host: "${DB_HOST:localhost}"
+  port: "${DB_PORT:5432}"
+  username: "${DB_USERNAME:postgres}"
+  password: "${DB_PASSWORD:root}"
+  name: "${DB_NAME:aclove}"
+  sslmode: "${DB_SSLMODE:disable}"
+  max_open_conns: 25
+  max_idle_conns: 5
+  conn_max_lifetime: 300
