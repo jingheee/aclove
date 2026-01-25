@@ -22,7 +22,7 @@ type AppConfig struct {
 
 type DatabaseConfig struct {
 	Host            string `yaml:"host"`
-	Port            int    `yaml:"port"`
+	Port            string `yaml:"port"`
 	Username        string `yaml:"username"`
 	Password        string `yaml:"password"`
 	Name            string `yaml:"name"`
@@ -34,7 +34,7 @@ type DatabaseConfig struct {
 
 func (d *DatabaseConfig) DSN() string {
 	return fmt.Sprintf(
-		"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
+		"host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
 		d.Host, d.Port, d.Username, d.Password, d.Name, d.SSLMode,
 	)
 }
@@ -56,8 +56,13 @@ func Load(path string) (*Config, error) {
 
 	expandValues(raw)
 
+	expandedData, err := yaml.Marshal(raw)
+	if err != nil {
+		return nil, fmt.Errorf("序列化配置文件失败: %w", err)
+	}
+
 	cfg := &Config{}
-	if err := yaml.Unmarshal(data, cfg); err != nil {
+	if err := yaml.Unmarshal(expandedData, cfg); err != nil {
 		return nil, fmt.Errorf("解析配置文件失败: %w", err)
 	}
 
@@ -83,8 +88,16 @@ func expandValues(m map[string]interface{}) {
 
 func expandEnv(value string) string {
 	if strings.HasPrefix(value, "${") && strings.HasSuffix(value, "}") {
-		envKey := strings.TrimPrefix(strings.TrimSuffix(value, "}"), "${")
-		if envValue := os.Getenv(envKey); envValue != "" {
+		content := strings.TrimPrefix(strings.TrimSuffix(value, "}"), "${")
+		if idx := strings.Index(content, ":"); idx != -1 {
+			envKey := content[:idx]
+			defaultVal := content[idx+1:]
+			if envValue := os.Getenv(envKey); envValue != "" {
+				return envValue
+			}
+			return defaultVal
+		}
+		if envValue := os.Getenv(content); envValue != "" {
 			return envValue
 		}
 	}

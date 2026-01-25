@@ -1,10 +1,10 @@
 app:
   host: "0.0.0.0"
-  port: 8080
+  port: 8888
 
 database:
   host: "${DB_HOST:localhost}"
-  port: "${DB_PORT:5432}"
+  port: "${DB_PORT:5433}"
   username: "${DB_USERNAME:postgres}"
   password: "${DB_PASSWORD:root}"
   name: "${DB_NAME:aclove}"
