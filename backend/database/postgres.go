@@ -15,7 +15,11 @@ type DB struct {
 	*sql.DB
 }
 
-func New(cfg *config.DatabaseConfig) (*DB, error) {
+func New(db *sql.DB) *DB {
+	return &DB{db}
+}
+
+func NewFromConfig(cfg *config.DatabaseConfig) (*DB, error) {
 	db, err := sql.Open("postgres", cfg.DSN())
 	if err != nil {
 		return nil, fmt.Errorf("连接数据库失败: %w", err)
