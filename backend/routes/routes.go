@@ -6,18 +6,13 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func Setup(router *gin.Engine, messageHandler *handlers.MessageHandler, categoryHandler *handlers.CategoryHandler) {
+func Setup(router *gin.Engine, categoryHandler *handlers.CategoryHandler) {
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok"})
 	})
 
-	router.GET("/api/hello", messageHandler.Hello)
-
 	api := router.Group("/api")
 	{
-		api.POST("/messages", messageHandler.Create)
-		api.GET("/messages", messageHandler.List)
-
 		categories := api.Group("/categories")
 		{
 			categories.POST("", categoryHandler.Create)

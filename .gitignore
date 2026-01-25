@@ -33,3 +33,4 @@ logs/
 # Test coverage
 coverage/
 .nyc_output/
+/backend/__debug_bin176940217

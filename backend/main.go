@@ -43,13 +43,11 @@ func main() {
 
 	router := gin.Default()
 
-	legacyDB := database.New(sqlDB)
-	messageHandler := handlers.NewMessageHandler(legacyDB)
 	categoryRepo := repository.NewCategoryRepository(gormDB)
 	categorySvc := service.NewCategoryService(categoryRepo)
 	categoryHandler := handlers.NewCategoryHandler(categorySvc)
 
-	routes.Setup(router, messageHandler, categoryHandler)
+	routes.Setup(router, categoryHandler)
 
 	addr := fmt.Sprintf("%s:%d", cfg.App.Host, cfg.App.Port)
 	logger.Info("服务器启动", "address", addr)

@@ -18,6 +18,7 @@ func NewCategoryService(repo *repository.CategoryRepository) *CategoryService {
 
 func (s *CategoryService) CreateCategory(ctx context.Context, req *models.CreateCategoryRequest) (*models.Category, error) {
 	category := &models.Category{
+		ID:          models.GenerateSnowflakeID(),
 		Name:        req.Name,
 		Description: req.Description,
 		ParentID:    req.ParentID,
@@ -39,14 +40,18 @@ func (s *CategoryService) UpdateCategory(ctx context.Context, id int64, req *mod
 		return nil, err
 	}
 
+	if req.ParentID != nil {
+		if err := s.ValidateParentID(ctx, req.ParentID); err != nil {
+			return nil, err
+		}
+		category.ParentID = req.ParentID
+	}
+
 	if req.Name != nil {
 		category.Name = *req.Name
 	}
 	if req.Description != nil {
 		category.Description = *req.Description
-	}
-	if req.ParentID != nil {
-		category.ParentID = req.ParentID
 	}
 	if req.Position != nil {
 		category.Position = *req.Position

@@ -36,7 +36,7 @@ func (h *CategoryHandler) Create(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, category.ToResponse())
+	c.JSON(http.StatusCreated, models.CategoryToResponse(category))
 }
 
 func (h *CategoryHandler) Get(c *gin.Context) {
@@ -52,7 +52,7 @@ func (h *CategoryHandler) Get(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, category.ToResponse())
+	c.JSON(http.StatusOK, models.CategoryToResponse(category))
 }
 
 func (h *CategoryHandler) Update(c *gin.Context) {
@@ -81,7 +81,7 @@ func (h *CategoryHandler) Update(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, category.ToResponse())
+	c.JSON(http.StatusOK, models.CategoryToResponse(category))
 }
 
 func (h *CategoryHandler) Delete(c *gin.Context) {
@@ -111,7 +111,7 @@ func (h *CategoryHandler) List(c *gin.Context) {
 
 	response := make([]*models.CategoryResponse, len(categories))
 	for i, category := range categories {
-		response[i] = category.ToResponse()
+		response[i] = models.CategoryToResponse(category)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -141,7 +141,7 @@ func (h *CategoryHandler) GetChildren(c *gin.Context) {
 
 	response := make([]*models.CategoryResponse, len(categories))
 	for i, category := range categories {
-		response[i] = category.ToResponse()
+		response[i] = models.CategoryToResponse(category)
 	}
 
 	c.JSON(http.StatusOK, response)
