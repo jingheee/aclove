@@ -99,28 +99,6 @@ func (h *CategoryHandler) Delete(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "删除成功"})
 }
 
-func (h *CategoryHandler) List(c *gin.Context) {
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
-
-	categories, total, err := h.svc.ListCategories(c.Request.Context(), page, pageSize)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "查询分类列表失败", "details": err.Error()})
-		return
-	}
-
-	response := make([]*models.CategoryResponse, len(categories))
-	for i, category := range categories {
-		response[i] = models.CategoryToResponse(category)
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"data":  response,
-		"total": total,
-		"page":  page,
-		"size":  pageSize,
-	})
-}
 
 func (h *CategoryHandler) GetChildren(c *gin.Context) {
 	var parentID *int64
@@ -145,4 +123,14 @@ func (h *CategoryHandler) GetChildren(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, response)
+}
+
+func (h *CategoryHandler) GetTree(c *gin.Context) {
+	tree, err := h.svc.GetCategoryTree(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "获取分类树失败", "details": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, tree)
 }

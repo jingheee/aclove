@@ -93,6 +93,33 @@ func (s *CategoryService) GetChildren(ctx context.Context, parentID *int64) ([]*
 	return s.repo.GetByParentID(ctx, parentID)
 }
 
+func (s *CategoryService) GetCategoryTree(ctx context.Context) ([]*models.CategoryResponse, error) {
+	allCategories, err := s.repo.List(ctx, 0, -1)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(allCategories) == 0 {
+		return []*models.CategoryResponse{}, nil
+	}
+
+	childrenMap := make(map[int64][]*models.Category)
+	for _, category := range allCategories {
+		if category.ParentID != nil {
+			childrenMap[*category.ParentID] = append(childrenMap[*category.ParentID], category)
+		}
+	}
+
+	rootCategories := make([]*models.Category, 0, len(allCategories))
+	for _, category := range allCategories {
+		if category.ParentID == nil {
+			rootCategories = append(rootCategories, category)
+		}
+	}
+
+	return models.CategoriesToResponseWithChildren(rootCategories, childrenMap), nil
+}
+
 func (s *CategoryService) ValidateParentID(ctx context.Context, parentID *int64) error {
 	if parentID == nil {
 		return nil

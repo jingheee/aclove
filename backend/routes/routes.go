@@ -16,7 +16,7 @@ func Setup(router *gin.Engine, categoryHandler *handlers.CategoryHandler) {
 		categories := api.Group("/categories")
 		{
 			categories.POST("", categoryHandler.Create)
-			categories.GET("", categoryHandler.List)
+			categories.GET("", categoryHandler.GetTree)
 			categories.GET("/:id", categoryHandler.Get)
 			categories.PUT("/:id", categoryHandler.Update)
 			categories.DELETE("/:id", categoryHandler.Delete)

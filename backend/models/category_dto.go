@@ -38,16 +38,15 @@ type UpdateCategoryRequest struct {
 }
 
 type CategoryResponse struct {
-	ID          int64     `json:"id"`
-	Name        string    `json:"name"`
-	Description string    `json:"description,omitempty"`
-	ParentID    *int64    `json:"parent_id,omitempty"`
-	Position    int       `json:"position"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	ID          int64               `json:"id"`
+	Name        string              `json:"name"`
+	Description string              `json:"description,omitempty"`
+	ParentID    *int64              `json:"parent_id,omitempty"`
+	Position    int                 `json:"position"`
+	CreatedAt   time.Time           `json:"created_at"`
+	UpdatedAt   time.Time           `json:"updated_at"`
+	Children    []*CategoryResponse `json:"children,omitempty"`
 }
-
-type CategoryToResponseFunc func(c *Category) *CategoryResponse
 
 func CategoryToResponse(c *Category) *CategoryResponse {
 	return &CategoryResponse{
@@ -59,4 +58,30 @@ func CategoryToResponse(c *Category) *CategoryResponse {
 		CreatedAt:   c.CreatedAt,
 		UpdatedAt:   c.UpdatedAt,
 	}
+}
+
+func CategoryToResponseWithChildren(c *Category, children []*Category) *CategoryResponse {
+	resp := CategoryToResponse(c)
+	if len(children) > 0 {
+		resp.Children = make([]*CategoryResponse, len(children))
+		for i, child := range children {
+			resp.Children[i] = CategoryToResponse(child)
+		}
+	}
+	return resp
+}
+
+func CategoriesToResponseWithChildren(categories []*Category, childrenMap map[int64][]*Category) []*CategoryResponse {
+	if len(categories) == 0 {
+		return nil
+	}
+	result := make([]*CategoryResponse, len(categories))
+	for i, category := range categories {
+		var children []*Category
+		if childrenMap != nil {
+			children = childrenMap[category.ID]
+		}
+		result[i] = CategoryToResponseWithChildren(category, children)
+	}
+	return result
 }
