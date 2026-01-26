@@ -1,23 +1,17 @@
-import { createApp } from 'vue'
-import './style.css'
-import App from './App.vue'
-import NaiveUI from 'naive-ui'
-import { createDiscreteApi } from 'naive-ui'
-import { VueQueryPlugin } from './queryClient'
+import NaiveUI, { createDiscreteApi } from "naive-ui";
+import { createApp } from "vue";
+import App from "./App.vue";
+import { VueQueryPlugin } from "./queryClient";
+import "./style.css";
 
-const app = createApp(App)
+const app = createApp(App);
 
-app.use(NaiveUI)
-app.use(VueQueryPlugin)
+app.use(NaiveUI);
+app.use(VueQueryPlugin);
 
-const { message, notification, dialog, loadingBar } = createDiscreteApi([
-  'message',
-  'dialog',
-  'notification',
-  'loadingBar'
-])
+const { message, dialog } = createDiscreteApi(["message", "dialog"]);
 
-app.config.globalProperties.$message = message
-app.config.globalProperties.$dialog = dialog
+app.config.globalProperties.$message = message;
+app.config.globalProperties.$dialog = dialog;
 
-app.mount('#app')
+app.mount("#app");
