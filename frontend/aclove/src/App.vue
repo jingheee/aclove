@@ -19,8 +19,8 @@ import {
   SunnyOutline,
   RefreshOutline,
 } from "@vicons/ionicons5";
-import { baseFetch } from "./api/client.js";
-import Home from "./components/Home.vue";
+import { baseFetch } from "@/api/client.js";
+import Home from "@/components/Home.vue";
 
 const collapsed = ref(false);
 const activeKey = ref("home");
