@@ -39,49 +39,43 @@ func (h *CategoryHandler) Create(c *gin.Context) {
 	c.JSON(http.StatusCreated, models.CategoryToResponse(category))
 }
 
-func (h *CategoryHandler) Get(c *gin.Context) {
+func (h *CategoryHandler) Get(c *gin.Context) (*models.CategoryResponse, error) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的分类ID"})
-		return
+		return nil, err
 	}
 
 	category, err := h.svc.GetCategory(c.Request.Context(), id)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "分类不存在"})
-		return
+		return nil, err
 	}
 
-	c.JSON(http.StatusOK, models.CategoryToResponse(category))
+	return models.CategoryToResponse(category), nil
 }
 
-func (h *CategoryHandler) Update(c *gin.Context) {
+func (h *CategoryHandler) Update(c *gin.Context) (*models.CategoryResponse, error) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的分类ID"})
-		return
+		return nil, err
 	}
 
 	var req models.UpdateCategoryRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的请求数据", "details": err.Error()})
-		return
+		return nil, err
 	}
 
 	if req.ParentID != nil {
 		if err := h.svc.ValidateParentID(c.Request.Context(), req.ParentID); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
+			return nil, err
 		}
 	}
 
 	category, err := h.svc.UpdateCategory(c.Request.Context(), id, &req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "更新分类失败", "details": err.Error()})
-		return
+		return nil, err
 	}
 
-	c.JSON(http.StatusOK, models.CategoryToResponse(category))
+	return models.CategoryToResponse(category), nil
 }
 
 func (h *CategoryHandler) Delete(c *gin.Context) {

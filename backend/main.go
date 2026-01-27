@@ -6,6 +6,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"io.lazydoge/aclove/cache"
 	"io.lazydoge/aclove/config"
 	"io.lazydoge/aclove/database"
 	"io.lazydoge/aclove/handlers"
@@ -56,7 +57,22 @@ func main() {
 	categorySvc := service.NewCategoryService(categoryRepo)
 	categoryHandler := handlers.NewCategoryHandler(categorySvc)
 
-	routes.Setup(router, categoryHandler)
+	var categoryCache *cache.Cache
+	if cfg.Redis.Addr != "" {
+		categoryCache, err = cache.New(cache.Config{
+			Addr:        cfg.Redis.Addr,
+			Password:    cfg.Redis.Password,
+			DB:          cfg.Redis.DB,
+			Prefix:      cfg.Redis.CachePrefix,
+			DefaultTTLD: cfg.Redis.CacheTTL,
+		})
+		if err != nil {
+			logger.Warn("连接Redis失败，缓存功能不可用", "error", err)
+			categoryCache = nil
+		}
+	}
+
+	routes.Setup(router, categoryHandler, categoryCache)
 
 	addr := fmt.Sprintf("%s:%d", cfg.App.Host, cfg.App.Port)
 	logger.Info("服务器启动", "address", addr)

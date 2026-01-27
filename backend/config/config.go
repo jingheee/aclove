@@ -13,6 +13,15 @@ import (
 type Config struct {
 	App      AppConfig      `yaml:"app"`
 	Database DatabaseConfig `yaml:"database"`
+	Redis    RedisConfig    `yaml:"redis"`
+}
+
+type RedisConfig struct {
+	Addr        string        `yaml:"addr"`
+	Password    string        `yaml:"password"`
+	DB          int           `yaml:"db"`
+	CachePrefix string        `yaml:"cache_prefix"`
+	CacheTTL    time.Duration `yaml:"cache_ttl"`
 }
 
 type AppConfig struct {
