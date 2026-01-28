@@ -10,14 +10,24 @@ import (
 )
 
 type CommentDO struct {
-	ID         int64          `gorm:"primaryKey;column:id;type:bigint;not null" json:"id"`
-	PostID     int64          `gorm:"column:post_id;type:bigint;not null;index" json:"post_id"`
-	UserID     *int64         `gorm:"column:user_id;type:bigint" json:"user_id"`
-	Content    string         `gorm:"column:content;type:text;not null" json:"content"`
-	ParentID   *int64         `gorm:"column:parent_id;type:bigint;index" json:"parent_id"`
-	CreatedAt  time.Time      `gorm:"column:created_at;type:timestamp with time zone" json:"created_at"`
-	UpdatedAt  time.Time      `gorm:"column:updated_at;type:timestamp with time zone" json:"updated_at"`
-	DeletedAt  gorm.DeletedAt `gorm:"column:deleted_at;type:timestamp with time zone;index" json:"deleted_at"`
+	ID              int64          `gorm:"primaryKey;column:id;type:bigint;not null" json:"id"`
+	PostID          int64          `gorm:"column:post_id;type:bigint;not null;index" json:"post_id"`
+	UserID          int64          `gorm:"column:user_id;type:bigint;not null" json:"user_id"`
+	ParentID        *int64         `gorm:"column:parent_id;type:bigint;index" json:"parent_id"`
+	Content         string         `gorm:"column:content;type:text;not null" json:"content"`
+	ContentRendered *string        `gorm:"column:content_rendered;type:text" json:"content_rendered"`
+	UpvoteCount     *int           `gorm:"column:upvote_count;type:integer;default:0" json:"upvote_count"`
+	DownvoteCount   *int           `gorm:"column:downvote_count;type:integer;default:0" json:"downvote_count"`
+	Status          *string        `gorm:"column:status;type:varchar;default:'active'" json:"status"`
+	IsCollapsed     *bool          `gorm:"column:is_collapsed;type:boolean;default:false" json:"is_collapsed"`
+	IP              *string        `gorm:"column:ip;type:varchar" json:"ip"`
+	UserAgent       *string        `gorm:"column:user_agent;type:varchar" json:"user_agent"`
+	EditedAt        *time.Time     `gorm:"column:edited_at;type:timestamp with time zone" json:"edited_at"`
+	EditCount       *int           `gorm:"column:edit_count;type:integer;default:0" json:"edit_count"`
+	CreatedAt       time.Time      `gorm:"column:created_at;type:timestamp with time zone;default:now()" json:"created_at"`
+	UpdatedAt       time.Time      `gorm:"column:updated_at;type:timestamp with time zone;default:now()" json:"updated_at"`
+	DeletedAt       gorm.DeletedAt `gorm:"column:deleted_at;type:timestamp with time zone;index" json:"deleted_at"`
+	DeletedReason   *string        `gorm:"column:deleted_reason;type:text" json:"deleted_reason"`
 }
 
 func (CommentDO) TableName() string {
@@ -71,11 +81,30 @@ func (r *commentRepo) Delete(ctx context.Context, id int64) error {
 	return nil
 }
 
+func (r *commentRepo) DeleteWithReason(ctx context.Context, id int64, reason string) error {
+	result := r.db.WithContext(ctx).
+		Model(&CommentDO{}).
+		Where("id = ?", id).
+		Updates(map[string]interface{}{
+			"deleted_at":       time.Now(),
+			"deleted_reason":   reason,
+			"status":           "deleted",
+		})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return ErrCommentNotFound
+	}
+	return nil
+}
+
 func (r *commentRepo) ListByPostID(ctx context.Context, postID int64, offset, limit int) ([]*CommentDO, error) {
 	var comments []*CommentDO
 	result := r.db.WithContext(ctx).
 		Where("post_id = ?", postID).
 		Where("parent_id IS NULL").
+		Where("status = ?", "active").
 		Order("created_at ASC").
 		Offset(offset).
 		Limit(limit).
@@ -90,6 +119,7 @@ func (r *commentRepo) ListByParentID(ctx context.Context, parentID int64, offset
 	var comments []*CommentDO
 	result := r.db.WithContext(ctx).
 		Where("parent_id = ?", parentID).
+		Where("status = ?", "active").
 		Order("created_at ASC").
 		Offset(offset).
 		Limit(limit).
@@ -105,6 +135,7 @@ func (r *commentRepo) CountByPostID(ctx context.Context, postID int64) (int64, e
 	result := r.db.WithContext(ctx).
 		Model(&CommentDO{}).
 		Where("post_id = ?", postID).
+		Where("status = ?", "active").
 		Count(&count)
 	if result.Error != nil {
 		return 0, result.Error
@@ -117,11 +148,120 @@ func (r *commentRepo) CountByParentID(ctx context.Context, parentID int64) (int6
 	result := r.db.WithContext(ctx).
 		Model(&CommentDO{}).
 		Where("parent_id = ?", parentID).
+		Where("status = ?", "active").
 		Count(&count)
 	if result.Error != nil {
 		return 0, result.Error
 	}
 	return count, nil
+}
+
+func (r *commentRepo) IncrementUpvoteCount(ctx context.Context, id int64) error {
+	result := r.db.WithContext(ctx).
+		Model(&CommentDO{}).
+		Where("id = ?", id).
+		Update("upvote_count", gorm.Expr("COALESCE(upvote_count, 0) + ?", 1))
+	if result.Error != nil {
+		return result.Error
+	}
+	return nil
+}
+
+func (r *commentRepo) DecrementUpvoteCount(ctx context.Context, id int64) error {
+	result := r.db.WithContext(ctx).
+		Model(&CommentDO{}).
+		Where("id = ?", id).
+		Where("COALESCE(upvote_count, 0) > ?", 0).
+		Update("upvote_count", gorm.Expr("COALESCE(upvote_count, 0) - ?", 1))
+	if result.Error != nil {
+		return result.Error
+	}
+	return nil
+}
+
+func (r *commentRepo) IncrementDownvoteCount(ctx context.Context, id int64) error {
+	result := r.db.WithContext(ctx).
+		Model(&CommentDO{}).
+		Where("id = ?", id).
+		Update("downvote_count", gorm.Expr("COALESCE(downvote_count, 0) + ?", 1))
+	if result.Error != nil {
+		return result.Error
+	}
+	return nil
+}
+
+func (r *commentRepo) DecrementDownvoteCount(ctx context.Context, id int64) error {
+	result := r.db.WithContext(ctx).
+		Model(&CommentDO{}).
+		Where("id = ?", id).
+		Where("COALESCE(downvote_count, 0) > ?", 0).
+		Update("downvote_count", gorm.Expr("COALESCE(downvote_count, 0) - ?", 1))
+	if result.Error != nil {
+		return result.Error
+	}
+	return nil
+}
+
+func (r *commentRepo) UpdateContent(ctx context.Context, id int64, content, contentRendered string) error {
+	result := r.db.WithContext(ctx).
+		Model(&CommentDO{}).
+		Where("id = ?", id).
+		Updates(map[string]interface{}{
+			"content":           content,
+			"content_rendered":  contentRendered,
+			"edited_at":         time.Now(),
+			"edit_count":        gorm.Expr("COALESCE(edit_count, 0) + ?", 1),
+		})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return ErrCommentNotFound
+	}
+	return nil
+}
+
+func (r *commentRepo) Collapse(ctx context.Context, id int64) error {
+	result := r.db.WithContext(ctx).
+		Model(&CommentDO{}).
+		Where("id = ?", id).
+		Update("is_collapsed", true)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return ErrCommentNotFound
+	}
+	return nil
+}
+
+func (r *commentRepo) Uncollapse(ctx context.Context, id int64) error {
+	result := r.db.WithContext(ctx).
+		Model(&CommentDO{}).
+		Where("id = ?", id).
+		Update("is_collapsed", false)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return ErrCommentNotFound
+	}
+	return nil
+}
+
+func (r *commentRepo) ListByUserID(ctx context.Context, userID int64, offset, limit int) ([]*CommentDO, error) {
+	var comments []*CommentDO
+	result := r.db.WithContext(ctx).
+		Where("user_id = ?", userID).
+		Where("status = ?", "active").
+		Order("created_at DESC").
+		Offset(offset).
+		Limit(limit).
+		Find(&comments)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return comments, nil
 }
 
 var (
@@ -143,10 +283,19 @@ type CommentRepo interface {
 	GetByID(ctx context.Context, id int64) (*CommentDO, error)
 	Update(ctx context.Context, comment *CommentDO) error
 	Delete(ctx context.Context, id int64) error
+	DeleteWithReason(ctx context.Context, id int64, reason string) error
 	ListByPostID(ctx context.Context, postID int64, offset, limit int) ([]*CommentDO, error)
 	ListByParentID(ctx context.Context, parentID int64, offset, limit int) ([]*CommentDO, error)
 	CountByPostID(ctx context.Context, postID int64) (int64, error)
 	CountByParentID(ctx context.Context, parentID int64) (int64, error)
+	IncrementUpvoteCount(ctx context.Context, id int64) error
+	DecrementUpvoteCount(ctx context.Context, id int64) error
+	IncrementDownvoteCount(ctx context.Context, id int64) error
+	DecrementDownvoteCount(ctx context.Context, id int64) error
+	UpdateContent(ctx context.Context, id int64, content, contentRendered string) error
+	Collapse(ctx context.Context, id int64) error
+	Uncollapse(ctx context.Context, id int64) error
+	ListByUserID(ctx context.Context, userID int64, offset, limit int) ([]*CommentDO, error)
 	WithContext(ctx context.Context) *gorm.DB
 	Transaction(ctx context.Context, fn func(tx *gorm.DB) error) error
 }

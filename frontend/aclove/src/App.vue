@@ -12,15 +12,22 @@ import {
   NAvatar,
   NSpace,
   NText,
+  NCard,
+  NEl,
+  NGradientText,
+  NDivider,
 } from "naive-ui";
 import {
   LayersOutline,
   MoonOutline,
   SunnyOutline,
   RefreshOutline,
+  HeartOutline,
+  SparklesOutline,
 } from "@vicons/ionicons5";
 import { baseFetch } from "@/api/client.js";
 import Home from "@/components/Home.vue";
+import mikuLogo from "@/assets/logo/miku.svg?url";
 
 const collapsed = ref(false);
 const activeKey = ref("home");
@@ -48,29 +55,6 @@ function categoryToMenuItem(category, parentKey = "") {
     ...(children && { children }),
   };
 }
-
-const fixedMenuItems = [
-  {
-    label: "首页",
-    key: "home",
-    icon: () => h(NIcon, null, { default: () => h(HomeOutline) }),
-  },
-  {
-    label: "数据统计",
-    key: "statistics",
-    icon: () => h(NIcon, null, { default: () => h(AnalyticsOutline) }),
-  },
-  {
-    label: "用户管理",
-    key: "users",
-    icon: () => h(NIcon, null, { default: () => h(PeopleOutline) }),
-  },
-  {
-    label: "系统设置",
-    key: "settings",
-    icon: () => h(NIcon, null, { default: () => h(SettingsOutline) }),
-  },
-];
 
 async function fetchCategories() {
   const response = await baseFetch("/categories");
@@ -131,7 +115,7 @@ onUnmounted(() => {
           <NAvatar
             round
             size="small"
-            src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgd2lkdGg9IjI0IiBoZWlnaHQ9IjI0Ij48cGF0aCBmaWxsPSIjMTBhMDU4IiBkPSJNMTIgMkM2LjUgMiAyIDYuNSAyIDEyYzAgNS41IDQuNSAxMCAxMCAxMHMxMC00LjUgMTAtMTBjMC01LjUtNC41LTEwLTEwLTEwem0zIDdoLTZ2NmgtMnY2aC0ydjZoLTJ2LTZoMnY2aDJ2LTZoMnY2aDJ2LTZ6bTYgMGgtNnY2aC0ydjZoLTJ2LTZoMnY2aDJ2LTZoMnY2aDJ2LTZ6bS02IDhoLTZ2NmgtMnY2aC0ydjZoLTJ2LTZoMnY2aDJ2LTZoMnY2aDJ2LTZ6"
+            :src="mikuLogo"
           />
           <span v-if="!collapsed" class="logo-text">ACLOVE</span>
         </div>
@@ -156,45 +140,42 @@ onUnmounted(() => {
       />
     </NLayoutSider>
 
-    <NLayout class="main-layout">
-      <NLayoutHeader bordered class="app-header">
-        <div class="header-content">
-          <div class="header-left">
-            <NButton
-              quaternary
-              circle
-              :loading="isFetching"
-              @click="handleRefreshCategories"
-            >
-              <template #icon>
-                <NIcon><RefreshOutline /></NIcon>
-              </template>
-            </NButton>
-          </div>
-          <div class="header-right">
-            <NSpace align="center" :size="16">
-              <NText depth="3">{{ currentTime }}</NText>
-              <NButton quaternary circle @click="toggleTheme">
-                <template #icon>
-                  <NIcon>
-                    <MoonOutline v-if="!isDark" />
-                    <SunnyOutline v-else />
+    <NLayoutContent class="app-content">
+      <div class="home-container">
+        <NCard class="welcome-card" :bordered="false">
+          <div class="welcome-content">
+            <NSpace vertical align="center" :size="24">
+              <div class="icon-wrapper">
+                <NIcon size="80" :depth="1">
+                  <HeartOutline />
+                </NIcon>
+              </div>
+              
+              <NGradientText
+                :size="48"
+                :font-size="48"
+                :weight="800"
+                type="linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
+              >
+                欢迎来到aclove匿名版
+              </NGradientText>
+              
+              <NDivider />
+              
+              <NText :depth="2" class="subtitle">
+                <NSpace vertical align="center" :size="12">
+                  <span>你所热爱的就是你的生活</span>
+                  <NIcon :depth="3" size="24">
+                    <SparklesOutline />
                   </NIcon>
-                </template>
-              </NButton>
+                </NSpace>
+              </NText>
             </NSpace>
           </div>
-        </div>
-      </NLayoutHeader>
+        </NCard>
+      </div>
+    </NLayoutContent>
 
-      <NLayoutContent class="app-content" :native-scrollbar="false">
-        <Home
-          :categories="categories || []"
-          :loading="categoriesLoading"
-          @refresh-categories="handleRefreshCategories"
-        />
-      </NLayoutContent>
-    </NLayout>
   </NLayout>
 </template>
 
@@ -244,6 +225,67 @@ onUnmounted(() => {
 
 .theme-toggle {
   margin: 0 12px 12px;
+}
+
+.app-content {
+  background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ec 100%);
+  min-height: 100%;
+}
+
+.dark .app-content {
+  background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 100%);
+}
+
+.home-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  padding: 40px 24px;
+}
+
+.welcome-card {
+  max-width: 800px;
+  width: 100%;
+  border-radius: 24px;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.1);
+  transition: transform 0.4s ease, box-shadow 0.4s ease;
+}
+
+.welcome-card:hover {
+  transform: translateY(-8px);
+  box-shadow: 0 20px 64px rgba(0, 0, 0, 0.16);
+}
+
+.dark .welcome-card {
+  background: rgba(30, 30, 46, 0.85);
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.4);
+}
+
+.welcome-content {
+  padding: 64px 48px;
+  text-align: center;
+}
+
+.icon-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 128px;
+  height: 128px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.12) 0%, rgba(118, 75, 162, 0.12) 100%);
+  margin: 0 auto;
+}
+
+.dark .icon-wrapper {
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.2) 0%, rgba(118, 75, 162, 0.2) 100%);
+}
+
+.subtitle {
+  font-size: 28px;
+  line-height: 1.8;
+  letter-spacing: 3px;
 }
 
 .app-header {

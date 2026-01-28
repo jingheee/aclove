@@ -10,11 +10,15 @@ import (
 )
 
 type AnonymousUserDO struct {
-	ID        int64          `gorm:"primaryKey;column:id;type:bigint;not null" json:"id"`
-	UUID      string         `gorm:"column:uuid;type:varchar(36);not null;uniqueIndex" json:"uuid"`
-	CreatedAt time.Time      `gorm:"column:created_at;type:timestamp with time zone" json:"created_at"`
-	UpdatedAt time.Time      `gorm:"column:updated_at;type:timestamp with time zone" json:"updated_at"`
-	DeletedAt gorm.DeletedAt `gorm:"column:deleted_at;type:timestamp with time zone;index" json:"deleted_at"`
+	ID              int64          `gorm:"primaryKey;column:id;type:bigint;not null" json:"id"`
+	Cookie          string         `gorm:"column:cookie;type:varchar;not null" json:"cookie"`
+	FingerprintHash *string        `gorm:"column:fingerprint_hash;type:varchar" json:"fingerprint_hash"`
+	IP              string         `gorm:"column:ip;type:varchar;not null" json:"ip"`
+	Status          *string        `gorm:"column:status;type:varchar;default:'active'" json:"status"`
+	StatusReason    *string        `gorm:"column:status_reason;type:text" json:"status_reason"`
+	BannedUntil     *time.Time     `gorm:"column:banned_until;type:timestamp with time zone" json:"banned_until"`
+	CooldownUntil   *time.Time     `gorm:"column:cooldown_until;type:timestamp with time zone" json:"cooldown_until"`
+	DeletedAt       gorm.DeletedAt `gorm:"column:deleted_at;type:timestamp with time zone;index" json:"deleted_at"`
 }
 
 func (AnonymousUserDO) TableName() string {
@@ -49,9 +53,9 @@ func (r *anonymousUserRepo) GetByID(ctx context.Context, id int64) (*AnonymousUs
 	return &user, nil
 }
 
-func (r *anonymousUserRepo) GetByUUID(ctx context.Context, uuid string) (*AnonymousUserDO, error) {
+func (r *anonymousUserRepo) GetByCookie(ctx context.Context, cookie string) (*AnonymousUserDO, error) {
 	var user AnonymousUserDO
-	result := r.db.WithContext(ctx).Where("uuid = ?", uuid).First(&user)
+	result := r.db.WithContext(ctx).Where("cookie = ?", cookie).First(&user)
 	if result.Error != nil {
 		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 			return nil, ErrAnonymousUserNotFound
@@ -102,6 +106,66 @@ func (r *anonymousUserRepo) Count(ctx context.Context) (int64, error) {
 	return count, nil
 }
 
+func (r *anonymousUserRepo) ListByStatus(ctx context.Context, status string, offset, limit int) ([]*AnonymousUserDO, error) {
+	var users []*AnonymousUserDO
+	result := r.db.WithContext(ctx).
+		Where("status = ?", status).
+		Order("created_at DESC").
+		Offset(offset).
+		Limit(limit).
+		Find(&users)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return users, nil
+}
+
+func (r *anonymousUserRepo) CountByStatus(ctx context.Context, status string) (int64, error) {
+	var count int64
+	result := r.db.WithContext(ctx).
+		Model(&AnonymousUserDO{}).
+		Where("status = ?", status).
+		Count(&count)
+	if result.Error != nil {
+		return 0, result.Error
+	}
+	return count, nil
+}
+
+func (r *anonymousUserRepo) Ban(ctx context.Context, id int64, until time.Time) error {
+	result := r.db.WithContext(ctx).
+		Model(&AnonymousUserDO{}).
+		Where("id = ?", id).
+		Updates(map[string]interface{}{
+			"status":       "banned",
+			"banned_until": until,
+		})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return ErrAnonymousUserNotFound
+	}
+	return nil
+}
+
+func (r *anonymousUserRepo) Unban(ctx context.Context, id int64) error {
+	result := r.db.WithContext(ctx).
+		Model(&AnonymousUserDO{}).
+		Where("id = ?", id).
+		Updates(map[string]interface{}{
+			"status":       "active",
+			"banned_until": nil,
+		})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return ErrAnonymousUserNotFound
+	}
+	return nil
+}
+
 var (
 	ErrAnonymousUserNotFound = errors.New("匿名用户不存在")
 )
@@ -119,11 +183,15 @@ func (r *anonymousUserRepo) Transaction(ctx context.Context, fn func(tx *gorm.DB
 type AnonymousUserRepo interface {
 	Create(ctx context.Context, user *AnonymousUserDO) error
 	GetByID(ctx context.Context, id int64) (*AnonymousUserDO, error)
-	GetByUUID(ctx context.Context, uuid string) (*AnonymousUserDO, error)
+	GetByCookie(ctx context.Context, cookie string) (*AnonymousUserDO, error)
 	Update(ctx context.Context, user *AnonymousUserDO) error
 	Delete(ctx context.Context, id int64) error
 	List(ctx context.Context, offset, limit int) ([]*AnonymousUserDO, error)
 	Count(ctx context.Context) (int64, error)
+	ListByStatus(ctx context.Context, status string, offset, limit int) ([]*AnonymousUserDO, error)
+	CountByStatus(ctx context.Context, status string) (int64, error)
+	Ban(ctx context.Context, id int64, until time.Time) error
+	Unban(ctx context.Context, id int64) error
 	WithContext(ctx context.Context) *gorm.DB
 	Transaction(ctx context.Context, fn func(tx *gorm.DB) error) error
 }

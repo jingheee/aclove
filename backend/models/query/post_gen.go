@@ -6,22 +6,34 @@ import (
 	"errors"
 	"time"
 
+	"gorm.io/datatypes"
 	"gorm.io/gorm"
 )
 
 type PostDO struct {
-	ID          int64          `gorm:"primaryKey;column:id;type:bigint;not null" json:"id"`
-	Title       string         `gorm:"column:title;type:varchar(255);not null" json:"title"`
-	Content     string         `gorm:"column:content;type:text;not null" json:"content"`
-	AuthorID    *int64         `gorm:"column:author_id;type:bigint" json:"author_id"`
-	CategoryID  *int64         `gorm:"column:category_id;type:bigint;index" json:"category_id"`
-	ViewCount   int            `gorm:"column:view_count;type:integer;default:0" json:"view_count"`
-	LikeCount   int            `gorm:"column:like_count;type:integer;default:0" json:"like_count"`
-	Status      int            `gorm:"column:status;type:integer;default:1" json:"status"`
-	CreatedAt   time.Time      `gorm:"column:created_at;type:timestamp with time zone" json:"created_at"`
-	UpdatedAt   time.Time      `gorm:"column:updated_at;type:timestamp with time zone" json:"updated_at"`
-	PublishedAt *time.Time     `gorm:"column:published_at;type:timestamp with time zone" json:"published_at"`
-	DeletedAt   gorm.DeletedAt `gorm:"column:deleted_at;type:timestamp with time zone;index" json:"deleted_at"`
+	ID               int64          `gorm:"primaryKey;column:id;type:bigint;not null" json:"id"`
+	UserID           int64          `gorm:"column:user_id;type:bigint;not null" json:"user_id"`
+	CategoryID       int64          `gorm:"column:category_id;type:bigint;not null" json:"category_id"`
+	Title            string         `gorm:"column:title;type:varchar;not null" json:"title"`
+	Content          string         `gorm:"column:content;type:text;not null" json:"content"`
+	ContentRendered  *string        `gorm:"column:content_rendered;type:text" json:"content_rendered"`
+	MediaAttachments datatypes.JSON `gorm:"column:media_attachments;type:jsonb;default:'[]'" json:"media_attachments"`
+	ViewCount        *int           `gorm:"column:view_count;type:integer;default:0" json:"view_count"`
+	UniqueViewCount  *int           `gorm:"column:unique_view_count;type:integer;default:0" json:"unique_view_count"`
+	ReplyCount       *int           `gorm:"column:reply_count;type:integer;default:0" json:"reply_count"`
+	UpvoteCount      *int           `gorm:"column:upvote_count;type:integer;default:0" json:"upvote_count"`
+	DownvoteCount    *int           `gorm:"column:downvote_count;type:integer;default:0" json:"downvote_count"`
+	Score            *float64       `gorm:"column:score;type:double precision;default:0" json:"score"`
+	IP               *string        `gorm:"column:ip;type:varchar" json:"ip"`
+	UserAgent        *string        `gorm:"column:user_agent;type:varchar" json:"user_agent"`
+	EditorType       *string        `gorm:"column:editor_type;type:varchar;default:'markdown'" json:"editor_type"`
+	EditCount        *int           `gorm:"column:edit_count;type:integer;default:0" json:"edit_count"`
+	LastEditedAt     *time.Time     `gorm:"column:last_edited_at;type:timestamp with time zone" json:"last_edited_at"`
+	LastEditedBy     *int64         `gorm:"column:last_edited_by;type:bigint" json:"last_edited_by"`
+	CreatedAt        time.Time      `gorm:"column:created_at;type:timestamp with time zone;default:now()" json:"created_at"`
+	UpdatedAt        time.Time      `gorm:"column:updated_at;type:timestamp with time zone;default:now()" json:"updated_at"`
+	DeletedAt        gorm.DeletedAt `gorm:"column:deleted_at;type:timestamp with time zone;index" json:"deleted_at"`
+	DeletedReason    *string        `gorm:"column:deleted_reason;type:text" json:"deleted_reason"`
 }
 
 func (PostDO) TableName() string {
@@ -75,10 +87,27 @@ func (r *postRepo) Delete(ctx context.Context, id int64) error {
 	return nil
 }
 
+func (r *postRepo) DeleteWithReason(ctx context.Context, id int64, reason string) error {
+	result := r.db.WithContext(ctx).
+		Model(&PostDO{}).
+		Where("id = ?", id).
+		Updates(map[string]interface{}{
+			"deleted_at":     time.Now(),
+			"deleted_reason": reason,
+		})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return ErrPostNotFound
+	}
+	return nil
+}
+
 func (r *postRepo) List(ctx context.Context, offset, limit int) ([]*PostDO, error) {
 	var posts []*PostDO
 	result := r.db.WithContext(ctx).
-		Where("status = ?", 1).
+		Where("deleted_at IS NULL").
 		Order("created_at DESC").
 		Offset(offset).
 		Limit(limit).
@@ -93,7 +122,7 @@ func (r *postRepo) ListByCategory(ctx context.Context, categoryID int64, offset,
 	var posts []*PostDO
 	result := r.db.WithContext(ctx).
 		Where("category_id = ?", categoryID).
-		Where("status = ?", 1).
+		Where("deleted_at IS NULL").
 		Order("created_at DESC").
 		Offset(offset).
 		Limit(limit).
@@ -107,7 +136,8 @@ func (r *postRepo) ListByCategory(ctx context.Context, categoryID int64, offset,
 func (r *postRepo) ListByAuthor(ctx context.Context, authorID int64, offset, limit int) ([]*PostDO, error) {
 	var posts []*PostDO
 	result := r.db.WithContext(ctx).
-		Where("author_id = ?", authorID).
+		Where("user_id = ?", authorID).
+		Where("deleted_at IS NULL").
 		Order("created_at DESC").
 		Offset(offset).
 		Limit(limit).
@@ -122,20 +152,134 @@ func (r *postRepo) IncrementViewCount(ctx context.Context, id int64) error {
 	result := r.db.WithContext(ctx).
 		Model(&PostDO{}).
 		Where("id = ?", id).
-		Update("view_count", gorm.Expr("view_count + ?", 1))
+		Update("view_count", gorm.Expr("COALESCE(view_count, 0) + ?", 1))
 	if result.Error != nil {
 		return result.Error
 	}
 	return nil
 }
 
-func (r *postRepo) IncrementLikeCount(ctx context.Context, id int64) error {
+func (r *postRepo) IncrementUniqueViewCount(ctx context.Context, id int64) error {
 	result := r.db.WithContext(ctx).
 		Model(&PostDO{}).
 		Where("id = ?", id).
-		Update("like_count", gorm.Expr("like_count + ?", 1))
+		Update("unique_view_count", gorm.Expr("COALESCE(unique_view_count, 0) + ?", 1))
 	if result.Error != nil {
 		return result.Error
+	}
+	return nil
+}
+
+func (r *postRepo) IncrementReplyCount(ctx context.Context, id int64) error {
+	result := r.db.WithContext(ctx).
+		Model(&PostDO{}).
+		Where("id = ?", id).
+		Update("reply_count", gorm.Expr("COALESCE(reply_count, 0) + ?", 1))
+	if result.Error != nil {
+		return result.Error
+	}
+	return nil
+}
+
+func (r *postRepo) DecrementReplyCount(ctx context.Context, id int64) error {
+	result := r.db.WithContext(ctx).
+		Model(&PostDO{}).
+		Where("id = ?", id).
+		Where("COALESCE(reply_count, 0) > ?", 0).
+		Update("reply_count", gorm.Expr("COALESCE(reply_count, 0) - ?", 1))
+	if result.Error != nil {
+		return result.Error
+	}
+	return nil
+}
+
+func (r *postRepo) IncrementUpvoteCount(ctx context.Context, id int64) error {
+	result := r.db.WithContext(ctx).
+		Model(&PostDO{}).
+		Where("id = ?", id).
+		Update("upvote_count", gorm.Expr("COALESCE(upvote_count, 0) + ?", 1))
+	if result.Error != nil {
+		return result.Error
+	}
+	return nil
+}
+
+func (r *postRepo) DecrementUpvoteCount(ctx context.Context, id int64) error {
+	result := r.db.WithContext(ctx).
+		Model(&PostDO{}).
+		Where("id = ?", id).
+		Where("COALESCE(upvote_count, 0) > ?", 0).
+		Update("upvote_count", gorm.Expr("COALESCE(upvote_count, 0) - ?", 1))
+	if result.Error != nil {
+		return result.Error
+	}
+	return nil
+}
+
+func (r *postRepo) IncrementDownvoteCount(ctx context.Context, id int64) error {
+	result := r.db.WithContext(ctx).
+		Model(&PostDO{}).
+		Where("id = ?", id).
+		Update("downvote_count", gorm.Expr("COALESCE(downvote_count, 0) + ?", 1))
+	if result.Error != nil {
+		return result.Error
+	}
+	return nil
+}
+
+func (r *postRepo) DecrementDownvoteCount(ctx context.Context, id int64) error {
+	result := r.db.WithContext(ctx).
+		Model(&PostDO{}).
+		Where("id = ?", id).
+		Where("COALESCE(downvote_count, 0) > ?", 0).
+		Update("downvote_count", gorm.Expr("COALESCE(downvote_count, 0) - ?", 1))
+	if result.Error != nil {
+		return result.Error
+	}
+	return nil
+}
+
+func (r *postRepo) UpdateScore(ctx context.Context, id int64, score float64) error {
+	result := r.db.WithContext(ctx).
+		Model(&PostDO{}).
+		Where("id = ?", id).
+		Update("score", score)
+	if result.Error != nil {
+		return result.Error
+	}
+	return nil
+}
+
+func (r *postRepo) UpdateContent(ctx context.Context, id int64, content, contentRendered string, editorType string) error {
+	result := r.db.WithContext(ctx).
+		Model(&PostDO{}).
+		Where("id = ?", id).
+		Updates(map[string]interface{}{
+			"content":          content,
+			"content_rendered": contentRendered,
+			"editor_type":      editorType,
+			"last_edited_at":   time.Now(),
+			"edit_count":       gorm.Expr("COALESCE(edit_count, 0) + ?", 1),
+		})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return ErrPostNotFound
+	}
+	return nil
+}
+
+func (r *postRepo) UpdateMediaAttachments(ctx context.Context, id int64, mediaAttachments datatypes.JSON) error {
+	result := r.db.WithContext(ctx).
+		Model(&PostDO{}).
+		Where("id = ?", id).
+		Update("media_attachments", mediaAttachments)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return ErrPostNotFound
 	}
 	return nil
 }
@@ -144,7 +288,7 @@ func (r *postRepo) Count(ctx context.Context) (int64, error) {
 	var count int64
 	result := r.db.WithContext(ctx).
 		Model(&PostDO{}).
-		Where("status = ?", 1).
+		Where("deleted_at IS NULL").
 		Count(&count)
 	if result.Error != nil {
 		return 0, result.Error
@@ -157,12 +301,52 @@ func (r *postRepo) CountByCategory(ctx context.Context, categoryID int64) (int64
 	result := r.db.WithContext(ctx).
 		Model(&PostDO{}).
 		Where("category_id = ?", categoryID).
-		Where("status = ?", 1).
+		Where("deleted_at IS NULL").
 		Count(&count)
 	if result.Error != nil {
 		return 0, result.Error
 	}
 	return count, nil
+}
+
+func (r *postRepo) CountByAuthor(ctx context.Context, authorID int64) (int64, error) {
+	var count int64
+	result := r.db.WithContext(ctx).
+		Model(&PostDO{}).
+		Where("user_id = ?", authorID).
+		Where("deleted_at IS NULL").
+		Count(&count)
+	if result.Error != nil {
+		return 0, result.Error
+	}
+	return count, nil
+}
+
+func (r *postRepo) ListByIDs(ctx context.Context, ids []int64) ([]*PostDO, error) {
+	var posts []*PostDO
+	result := r.db.WithContext(ctx).
+		Where("id IN ?", ids).
+		Where("deleted_at IS NULL").
+		Find(&posts)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return posts, nil
+}
+
+func (r *postRepo) SearchByTitle(ctx context.Context, keyword string, offset, limit int) ([]*PostDO, error) {
+	var posts []*PostDO
+	result := r.db.WithContext(ctx).
+		Where("title ILIKE ?", "%"+keyword+"%").
+		Where("deleted_at IS NULL").
+		Order("created_at DESC").
+		Offset(offset).
+		Limit(limit).
+		Find(&posts)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return posts, nil
 }
 
 var (
@@ -184,13 +368,26 @@ type PostRepo interface {
 	GetByID(ctx context.Context, id int64) (*PostDO, error)
 	Update(ctx context.Context, post *PostDO) error
 	Delete(ctx context.Context, id int64) error
+	DeleteWithReason(ctx context.Context, id int64, reason string) error
 	List(ctx context.Context, offset, limit int) ([]*PostDO, error)
 	ListByCategory(ctx context.Context, categoryID int64, offset, limit int) ([]*PostDO, error)
 	ListByAuthor(ctx context.Context, authorID int64, offset, limit int) ([]*PostDO, error)
 	IncrementViewCount(ctx context.Context, id int64) error
-	IncrementLikeCount(ctx context.Context, id int64) error
+	IncrementUniqueViewCount(ctx context.Context, id int64) error
+	IncrementReplyCount(ctx context.Context, id int64) error
+	DecrementReplyCount(ctx context.Context, id int64) error
+	IncrementUpvoteCount(ctx context.Context, id int64) error
+	DecrementUpvoteCount(ctx context.Context, id int64) error
+	IncrementDownvoteCount(ctx context.Context, id int64) error
+	DecrementDownvoteCount(ctx context.Context, id int64) error
+	UpdateScore(ctx context.Context, id int64, score float64) error
+	UpdateContent(ctx context.Context, id int64, content, contentRendered string, editorType string) error
+	UpdateMediaAttachments(ctx context.Context, id int64, mediaAttachments datatypes.JSON) error
 	Count(ctx context.Context) (int64, error)
 	CountByCategory(ctx context.Context, categoryID int64) (int64, error)
+	CountByAuthor(ctx context.Context, authorID int64) (int64, error)
+	ListByIDs(ctx context.Context, ids []int64) ([]*PostDO, error)
+	SearchByTitle(ctx context.Context, keyword string, offset, limit int) ([]*PostDO, error)
 	WithContext(ctx context.Context) *gorm.DB
 	Transaction(ctx context.Context, fn func(tx *gorm.DB) error) error
 }
