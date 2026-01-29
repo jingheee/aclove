@@ -11,6 +11,7 @@ import (
 	"io.lazydoge/aclove/database"
 	"io.lazydoge/aclove/handlers"
 	"io.lazydoge/aclove/logger"
+	"io.lazydoge/aclove/models/query"
 	"io.lazydoge/aclove/repository"
 	"io.lazydoge/aclove/routes"
 	"io.lazydoge/aclove/service"
@@ -57,6 +58,10 @@ func main() {
 	categorySvc := service.NewCategoryService(categoryRepo)
 	categoryHandler := handlers.NewCategoryHandler(categorySvc)
 
+	anonymousUserRepo := query.NewAnonymousUserRepo(gormDB)
+	anonymousUserSvc := service.NewAnonymousUserService(anonymousUserRepo)
+	anonymousUserHandler := handlers.NewAnonymousUserHandler(anonymousUserSvc)
+
 	var categoryCache *cache.Cache
 	if cfg.Redis.Addr != "" {
 		categoryCache, err = cache.New(cache.Config{
@@ -72,7 +77,7 @@ func main() {
 		}
 	}
 
-	routes.Setup(router, categoryHandler, categoryCache)
+	routes.Setup(router, categoryHandler, categoryCache, anonymousUserSvc, anonymousUserHandler)
 
 	addr := fmt.Sprintf("%s:%d", cfg.App.Host, cfg.App.Port)
 	logger.Info("服务器启动", "address", addr)
@@ -97,6 +102,24 @@ func initDatabase(db *gorm.DB) error {
 		);
 		
 		CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at DESC);
+
+		CREATE TABLE IF NOT EXISTS anonymous_users (
+			id BIGSERIAL PRIMARY KEY,
+			cookie VARCHAR(64) NOT NULL UNIQUE,
+			fingerprint_hash VARCHAR(128),
+			ip VARCHAR(45) NOT NULL,
+			status VARCHAR(20) DEFAULT 'active',
+			status_reason TEXT,
+			banned_until TIMESTAMP WITH TIME ZONE,
+			cooldown_until TIMESTAMP WITH TIME ZONE,
+			created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+			deleted_at TIMESTAMP WITH TIME ZONE
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_anonymous_users_cookie ON anonymous_users(cookie);
+		CREATE INDEX IF NOT EXISTS idx_anonymous_users_status ON anonymous_users(status);
+		CREATE INDEX IF NOT EXISTS idx_anonymous_users_deleted_at ON anonymous_users(deleted_at);
 	`
 	return db.Exec(createTableSQL).Error
 }

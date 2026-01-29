@@ -4,18 +4,40 @@ import (
 	"fmt"
 	"io.lazydoge/aclove/cache"
 	"io.lazydoge/aclove/handlers"
+	"io.lazydoge/aclove/middleware"
 	"io.lazydoge/aclove/models"
+	"io.lazydoge/aclove/service"
 
 	"github.com/gin-gonic/gin"
 )
 
-func Setup(router *gin.Engine, categoryHandler *handlers.CategoryHandler, categoryCache *cache.Cache) {
+func Setup(
+	router *gin.Engine,
+	categoryHandler *handlers.CategoryHandler,
+	categoryCache *cache.Cache,
+	anonymousUserSvc *service.AnonymousUserService,
+	anonymousUserHandler *handlers.AnonymousUserHandler,
+) {
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok"})
 	})
 
+	sessionMiddleware := middleware.NewSessionMiddleware(anonymousUserSvc)
+
 	api := router.Group("/api")
 	{
+		users := api.Group("/users")
+		{
+			users.GET("/me", sessionMiddleware.Handler(), anonymousUserHandler.GetCurrentUser)
+		}
+
+		admin := api.Group("/admin")
+		{
+			admin.POST("/users/ban", anonymousUserHandler.BanUser)
+			admin.POST("/users/unban", anonymousUserHandler.UnbanUser)
+			admin.POST("/users/cooldown", anonymousUserHandler.SetCooldown)
+		}
+
 		categories := api.Group("/categories")
 		{
 			categories.POST("", categoryHandler.Create)
