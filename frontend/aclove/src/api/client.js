@@ -1,4 +1,4 @@
-const API_BASE_URL = 'http://localhost:8888/api'
+const API_BASE_URL = '/api'
 
 async function baseFetch(endpoint, options = {}) {
   const url = `${API_BASE_URL}${endpoint}`
@@ -8,6 +8,7 @@ async function baseFetch(endpoint, options = {}) {
       'Content-Type': 'application/json',
       ...options.headers,
     },
+    credentials: 'include',
     ...options,
   }
 

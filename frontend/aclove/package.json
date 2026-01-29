@@ -13,6 +13,7 @@
     "@tanstack/vue-query": "^5.92.9",
     "@vicons/ionicons5": "^0.13.0",
     "naive-ui": "^2.43.2",
+    "pinia": "^3.0.4",
     "sass": "^1.97.3",
     "vue": "^3.5.24"
   },

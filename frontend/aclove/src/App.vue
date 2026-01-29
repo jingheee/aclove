@@ -1,5 +1,5 @@
 <script setup>
-import { h, ref, computed, onUnmounted } from "vue";
+import { h, ref, computed, onUnmounted, onMounted } from "vue";
 import { useQuery } from "@tanstack/vue-query";
 import {
   NLayout,
@@ -26,14 +26,24 @@ import {
   SparklesOutline,
 } from "@vicons/ionicons5";
 import { baseFetch } from "@/api/client.js";
+import { useUserStore } from "@/stores/user.js";
 import Home from "@/components/Home.vue";
 import mikuLogo from "@/assets/logo/miku.svg?url";
 
+const userStore = useUserStore();
 const collapsed = ref(false);
 const activeKey = ref("home");
 const isDark = ref(false);
 const currentTime = ref(new Date().toLocaleString());
 let timeInterval = null;
+
+onMounted(async () => {
+  try {
+    await userStore.initSession();
+  } catch (err) {
+    console.error("Session 初始化失败:", err);
+  }
+});
 
 function toggleTheme() {
   isDark.value = !isDark.value;
