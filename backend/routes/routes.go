@@ -2,13 +2,15 @@ package routes
 
 import (
 	"fmt"
+
+	"github.com/gin-gonic/gin"
+
 	"io.lazydoge/aclove/cache"
 	"io.lazydoge/aclove/handlers"
 	"io.lazydoge/aclove/middleware"
 	"io.lazydoge/aclove/models"
 	"io.lazydoge/aclove/service"
-
-	"github.com/gin-gonic/gin"
+	"io.lazydoge/aclove/session"
 )
 
 func Setup(
@@ -17,12 +19,13 @@ func Setup(
 	categoryCache *cache.Cache,
 	anonymousUserSvc *service.AnonymousUserService,
 	anonymousUserHandler *handlers.AnonymousUserHandler,
+	sessionManager *session.Manager,
 ) {
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok"})
 	})
 
-	sessionMiddleware := middleware.NewSessionMiddleware(anonymousUserSvc)
+	sessionMiddleware := middleware.NewSessionMiddleware(sessionManager)
 
 	api := router.Group("/api")
 	{

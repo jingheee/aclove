@@ -12,3 +12,20 @@ database:
   max_open_conns: 25
   max_idle_conns: 5
   conn_max_lifetime: 300
+
+redis:
+  addr: "${REDIS_ADDR:localhost:6379}"
+  password: "${REDIS_PASSWORD:}"
+  db: 0
+  cache_prefix: "aclove:cache:"
+  cache_ttl: "24h"
+  session_prefix: "aclove:session:"
+  session_ttl: "720h"
+  session_cleanup_interval: "5m"
+
+session:
+  cookie_name: "aclove_session"
+  cookie_domain: ""
+  cookie_secure: false
+  cookie_http_only: true
+  cookie_same_site: "Lax"

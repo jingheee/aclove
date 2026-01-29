@@ -15,6 +15,7 @@ import (
 	"io.lazydoge/aclove/repository"
 	"io.lazydoge/aclove/routes"
 	"io.lazydoge/aclove/service"
+	"io.lazydoge/aclove/session"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -46,13 +47,13 @@ func main() {
 
 	router := gin.Default()
 
-	config := cors.DefaultConfig()
-	config.AllowOrigins = []string{"*"}
-	config.AllowMethods = []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"}
-	config.AllowHeaders = []string{"Origin", "Content-Type", "Accept", "Authorization"}
-	config.ExposeHeaders = []string{"Content-Length"}
-	config.AllowCredentials = true
-	router.Use(cors.New(config))
+	corsConfig := cors.DefaultConfig()
+	corsConfig.AllowOrigins = []string{"*"}
+	corsConfig.AllowMethods = []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"}
+	corsConfig.AllowHeaders = []string{"Origin", "Content-Type", "Accept", "Authorization", "X-Device-Fingerprint"}
+	corsConfig.ExposeHeaders = []string{"Content-Length"}
+	corsConfig.AllowCredentials = true
+	router.Use(cors.New(corsConfig))
 
 	categoryRepo := repository.NewCategoryRepository(gormDB)
 	categorySvc := service.NewCategoryService(categoryRepo)
@@ -63,6 +64,8 @@ func main() {
 	anonymousUserHandler := handlers.NewAnonymousUserHandler(anonymousUserSvc)
 
 	var categoryCache *cache.Cache
+	var sessionManager *session.Manager
+
 	if cfg.Redis.Addr != "" {
 		categoryCache, err = cache.New(cache.Config{
 			Addr:        cfg.Redis.Addr,
@@ -75,9 +78,31 @@ func main() {
 			logger.Warn("连接Redis失败，缓存功能不可用", "error", err)
 			categoryCache = nil
 		}
+
+		sessionManager, err = session.NewManager(anonymousUserRepo, session.ManagerConfig{
+			StoreConfig: session.StoreConfig{
+				RedisAddr:       cfg.Redis.Addr,
+				RedisPassword:   cfg.Redis.Password,
+				RedisDB:         cfg.Redis.DB,
+				KeyPrefix:       cfg.Redis.SessionPrefix,
+				SessionTTL:      cfg.Redis.SessionTTL,
+				CleanupInterval: cfg.Redis.SessionCleanupInterval,
+			},
+			CookieName:     cfg.Session.CookieName,
+			CookieDomain:   cfg.Session.CookieDomain,
+			CookieSecure:   cfg.Session.CookieSecure,
+			CookieHttpOnly: cfg.Session.CookieHttpOnly,
+			CookieSameSite: cfg.Session.CookieSameSite,
+		})
+		if err != nil {
+			logger.Fatal("创建Session Manager失败", "error", err)
+		}
+		defer sessionManager.Close()
+	} else {
+		logger.Fatal("Redis配置不能为空，分布式session需要Redis支持")
 	}
 
-	routes.Setup(router, categoryHandler, categoryCache, anonymousUserSvc, anonymousUserHandler)
+	routes.Setup(router, categoryHandler, categoryCache, anonymousUserSvc, anonymousUserHandler, sessionManager)
 
 	addr := fmt.Sprintf("%s:%d", cfg.App.Host, cfg.App.Port)
 	logger.Info("服务器启动", "address", addr)
@@ -91,6 +116,8 @@ func main() {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
+
+	logger.Info("服务器正在关闭")
 }
 
 func initDatabase(db *gorm.DB) error {
