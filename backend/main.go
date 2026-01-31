@@ -6,6 +6,11 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/gin-contrib/cors"
+	"github.com/gin-gonic/gin"
+	"github.com/redis/rueidis"
+	"gorm.io/gorm"
+
 	"io.lazydoge/aclove/cache"
 	"io.lazydoge/aclove/config"
 	"io.lazydoge/aclove/database"
@@ -16,10 +21,6 @@ import (
 	"io.lazydoge/aclove/routes"
 	"io.lazydoge/aclove/service"
 	"io.lazydoge/aclove/session"
-
-	"github.com/gin-contrib/cors"
-	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 )
 
 func main() {
@@ -63,8 +64,11 @@ func main() {
 	anonymousUserSvc := service.NewAnonymousUserService(anonymousUserRepo)
 	anonymousUserHandler := handlers.NewAnonymousUserHandler(anonymousUserSvc)
 
+	postRepo := query.NewPostRepo(gormDB)
+
 	var categoryCache *cache.Cache
 	var sessionManager *session.Manager
+	var redisClient rueidis.Client
 
 	if cfg.Redis.Addr != "" {
 		categoryCache, err = cache.New(cache.Config{
@@ -77,6 +81,15 @@ func main() {
 		if err != nil {
 			logger.Warn("连接Redis失败，缓存功能不可用", "error", err)
 			categoryCache = nil
+		}
+
+		redisClient, err = rueidis.NewClient(rueidis.ClientOption{
+			InitAddress: []string{cfg.Redis.Addr},
+			Password:    cfg.Redis.Password,
+			SelectDB:    cfg.Redis.DB,
+		})
+		if err != nil {
+			logger.Warn("连接Redis客户端失败", "error", err)
 		}
 
 		sessionManager, err = session.NewManager(anonymousUserRepo, session.ManagerConfig{
@@ -102,7 +115,10 @@ func main() {
 		logger.Fatal("Redis配置不能为空，分布式session需要Redis支持")
 	}
 
-	routes.Setup(router, categoryHandler, categoryCache, anonymousUserSvc, anonymousUserHandler, sessionManager)
+	postSvc := service.NewPostService(postRepo, categoryRepo, redisClient)
+	postHandler := handlers.NewPostHandler(postSvc)
+
+	routes.Setup(router, categoryHandler, categoryCache, anonymousUserSvc, anonymousUserHandler, sessionManager, postHandler)
 
 	addr := fmt.Sprintf("%s:%d", cfg.App.Host, cfg.App.Port)
 	logger.Info("服务器启动", "address", addr)

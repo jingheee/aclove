@@ -97,3 +97,28 @@ func (r *CategoryRepository) Count(ctx context.Context) (int64, error) {
 	}
 	return count, nil
 }
+
+func (r *CategoryRepository) UpdatePostsCategoryID(ctx context.Context, oldCategoryID, newCategoryID int64) error {
+	result := r.db.WithContext(ctx).
+		Model(&query.PostDO{}).
+		Where("category_id = ?", oldCategoryID).
+		Update("category_id", newCategoryID)
+	if result.Error != nil {
+		return result.Error
+	}
+	return nil
+}
+
+func (r *CategoryRepository) GetFirstAvailableCategory(ctx context.Context) (*query.CategoryDO, error) {
+	var category query.CategoryDO
+	result := r.db.WithContext(ctx).
+		Order("position ASC, created_at ASC").
+		First(&category)
+	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return nil, ErrCategoryNotFound
+		}
+		return nil, result.Error
+	}
+	return &category, nil
+}

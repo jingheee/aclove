@@ -20,12 +20,14 @@ func Setup(
 	anonymousUserSvc *service.AnonymousUserService,
 	anonymousUserHandler *handlers.AnonymousUserHandler,
 	sessionManager *session.Manager,
+	postHandler *handlers.PostHandler,
 ) {
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok"})
 	})
 
 	sessionMiddleware := middleware.NewSessionMiddleware(sessionManager)
+	requireActiveUser := middleware.RequireActiveUser()
 
 	api := router.Group("/api")
 	{
@@ -49,6 +51,15 @@ func Setup(
 			categories.PUT("/:id", wrapCategoryUpdate(categoryHandler, categoryCache))
 			categories.DELETE("/:id", categoryHandler.Delete)
 			categories.GET("/:id/children", categoryHandler.GetChildren)
+		}
+
+		posts := api.Group("/posts")
+		{
+			posts.GET("", postHandler.List)
+			posts.GET("/:id", postHandler.Get)
+			posts.POST("", sessionMiddleware.Handler(), requireActiveUser, postHandler.Create)
+			posts.PUT("/:id", sessionMiddleware.Handler(), requireActiveUser, postHandler.Update)
+			posts.DELETE("/:id", sessionMiddleware.Handler(), requireActiveUser, postHandler.Delete)
 		}
 	}
 }

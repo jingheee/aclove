@@ -64,6 +64,30 @@ func (s *CategoryService) UpdateCategory(ctx context.Context, id int64, req *mod
 }
 
 func (s *CategoryService) DeleteCategory(ctx context.Context, id int64) error {
+	category, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	targetCategoryID := int64(0)
+	if category.ParentID != nil {
+		targetCategoryID = *category.ParentID
+	} else {
+		firstCategory, err := s.repo.GetFirstAvailableCategory(ctx)
+		if err != nil {
+			return err
+		}
+		targetCategoryID = firstCategory.ID
+	}
+
+	if targetCategoryID == id {
+		return errors.New("无法删除唯一的分类，请先创建其他分类")
+	}
+
+	if err := s.repo.UpdatePostsCategoryID(ctx, id, targetCategoryID); err != nil {
+		return err
+	}
+
 	return s.repo.Delete(ctx, id)
 }
 
