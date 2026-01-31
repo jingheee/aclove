@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue'
+import { computed } from "vue";
 import {
   NCard,
   NSpace,
@@ -8,7 +8,7 @@ import {
   NIcon,
   NButton,
   NDropdown,
-} from 'naive-ui'
+} from "naive-ui";
 import {
   EyeOutline,
   ChatbubbleOutline,
@@ -17,83 +17,83 @@ import {
   CreateOutline,
   TrashOutline,
   TimeOutline,
-} from '@vicons/ionicons5'
-import { useUserStore } from '@/stores/user.js'
+} from "@vicons/ionicons5";
+import { useUserStore } from "@/stores/user.js";
 
 const props = defineProps({
   post: {
     type: Object,
     required: true,
   },
-})
+});
 
-const emit = defineEmits(['click', 'edit', 'delete'])
+const emit = defineEmits(["click", "edit", "delete"]);
 
-const userStore = useUserStore()
+const userStore = useUserStore();
 
 const isAuthor = computed(() => {
-  return userStore.userInfo?.id === props.post.author?.id
-})
+  return userStore.userInfo?.id === props.post.author?.id;
+});
 
 const hasMedia = computed(() => {
-  return props.post.media_count > 0
-})
+  return props.post.media_count > 0;
+});
 
 const isEdited = computed(() => {
-  return props.post.edit_count > 0
-})
+  return props.post.edit_count > 0;
+});
 
 function formatTime(dateString) {
-  const date = new Date(dateString)
-  const now = new Date()
-  const diff = now - date
+  const date = new Date(dateString);
+  const now = new Date();
+  const diff = now - date;
 
-  const minutes = Math.floor(diff / 60000)
-  const hours = Math.floor(diff / 3600000)
-  const days = Math.floor(diff / 86400000)
+  const minutes = Math.floor(diff / 60000);
+  const hours = Math.floor(diff / 3600000);
+  const days = Math.floor(diff / 86400000);
 
-  if (minutes < 1) return '刚刚'
-  if (minutes < 60) return `${minutes}分钟前`
-  if (hours < 24) return `${hours}小时前`
-  if (days < 30) return `${days}天前`
+  if (minutes < 1) return "刚刚";
+  if (minutes < 60) return `${minutes}分钟前`;
+  if (hours < 24) return `${hours}小时前`;
+  if (days < 30) return `${days}天前`;
 
-  return date.toLocaleDateString('zh-CN')
+  return date.toLocaleDateString("zh-CN");
 }
 
 function handleClick() {
-  emit('click', props.post)
+  emit("click", props.post);
 }
 
 function handleEdit(e) {
-  e.stopPropagation()
-  emit('edit', props.post)
+  e.stopPropagation();
+  emit("edit", props.post);
 }
 
 function handleDelete(e) {
-  e.stopPropagation()
-  emit('delete', props.post)
+  e.stopPropagation();
+  emit("delete", props.post);
 }
 
 const dropdownOptions = [
   {
-    label: '编辑',
-    key: 'edit',
+    label: "编辑",
+    key: "edit",
     icon: () => h(NIcon, null, { default: () => h(CreateOutline) }),
     show: isAuthor.value,
   },
   {
-    label: '删除',
-    key: 'delete',
+    label: "删除",
+    key: "delete",
     icon: () => h(NIcon, null, { default: () => h(TrashOutline) }),
     show: isAuthor.value,
   },
-].filter(opt => opt.show)
+].filter((opt) => opt.show);
 
 function handleDropdownSelect(key) {
-  if (key === 'edit') {
-    emit('edit', props.post)
-  } else if (key === 'delete') {
-    emit('delete', props.post)
+  if (key === "edit") {
+    emit("edit", props.post);
+  } else if (key === "delete") {
+    emit("delete", props.post);
   }
 }
 </script>
@@ -107,9 +107,7 @@ function handleDropdownSelect(key) {
   >
     <div class="post-header">
       <div class="post-meta">
-        <NTag size="small" type="info" class="anonymous-tag">
-          匿名
-        </NTag>
+        <NTag size="small" type="info" class="anonymous-tag"> 匿名 </NTag>
         <NText depth="3" class="post-time">
           <NIcon size="14">
             <TimeOutline />
@@ -125,11 +123,7 @@ function handleDropdownSelect(key) {
         @select="handleDropdownSelect"
         trigger="click"
       >
-        <NButton
-          text
-          class="more-btn"
-          @click.stop
-        >
+        <NButton text class="more-btn" @click.stop>
           <NIcon size="20">
             <EllipsisHorizontal />
           </NIcon>
@@ -164,9 +158,7 @@ function handleDropdownSelect(key) {
           {{ post.upvote_count || 0 }}
         </NText>
 
-        <NTag v-if="hasMedia" size="small" type="success">
-          有附件
-        </NTag>
+        <NTag v-if="hasMedia" size="small" type="success"> 有附件 </NTag>
       </NSpace>
     </div>
   </NCard>

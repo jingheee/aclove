@@ -1,50 +1,49 @@
 <script setup>
-import { ref, watch, onMounted } from 'vue'
-import { Editor } from '@bytemd/vue-next'
-import gfm from '@bytemd/plugin-gfm'
-import highlight from '@bytemd/plugin-highlight'
-import breaks from '@bytemd/plugin-breaks'
-import 'bytemd/dist/index.css'
-import 'github-markdown-css/github-markdown.css'
+import { ref, watch, onMounted } from "vue";
+import { Editor } from "@bytemd/vue-next";
+import gfm from "@bytemd/plugin-gfm";
+import highlight from "@bytemd/plugin-highlight";
+import breaks from "@bytemd/plugin-breaks";
+import "bytemd/dist/index.css";
+import "github-markdown-css/github-markdown.css";
 
 const props = defineProps({
   modelValue: {
     type: String,
-    default: '',
+    default: "",
   },
   placeholder: {
     type: String,
-    default: '请输入内容...',
+    default: "请输入内容...",
   },
   maxLength: {
     type: Number,
     default: 10000,
   },
-})
+});
 
-const emit = defineEmits(['update:modelValue', 'change'])
+const emit = defineEmits(["update:modelValue", "change"]);
 
-const content = ref(props.modelValue)
+const content = ref(props.modelValue);
 
-const plugins = [
-  gfm(),
-  highlight(),
-  breaks(),
-]
+const plugins = [gfm(), highlight(), breaks()];
 
-watch(() => props.modelValue, (newVal) => {
-  if (newVal !== content.value) {
-    content.value = newVal
-  }
-})
+watch(
+  () => props.modelValue,
+  (newVal) => {
+    if (newVal !== content.value) {
+      content.value = newVal;
+    }
+  },
+);
 
 watch(content, (newVal) => {
-  emit('update:modelValue', newVal)
-  emit('change', newVal)
-})
+  emit("update:modelValue", newVal);
+  emit("change", newVal);
+});
 
 function handleChange(val) {
-  content.value = val
+  content.value = val;
 }
 </script>
 
@@ -57,7 +56,10 @@ function handleChange(val) {
       @change="handleChange"
     />
     <div class="editor-footer">
-      <span class="char-count" :class="{ 'over-limit': content?.length > maxLength }">
+      <span
+        class="char-count"
+        :class="{ 'over-limit': content?.length > maxLength }"
+      >
         {{ content?.length || 0 }} / {{ maxLength }}
       </span>
     </div>
@@ -81,7 +83,7 @@ function handleChange(val) {
 }
 
 .markdown-editor :deep(.bytemd-editor) {
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-family: "JetBrains Mono", "Fira Code", monospace;
   font-size: 14px;
   line-height: 1.6;
 }

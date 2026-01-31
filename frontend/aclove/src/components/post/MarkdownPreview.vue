@@ -1,40 +1,69 @@
 <script setup>
-import { computed } from 'vue'
-import { marked } from 'marked'
-import DOMPurify from 'dompurify'
+import { computed } from "vue";
+import { marked } from "marked";
+import DOMPurify from "dompurify";
 
 const props = defineProps({
   content: {
     type: String,
-    default: '',
+    default: "",
   },
-})
+});
 
 const renderedContent = computed(() => {
-  if (!props.content) return ''
+  if (!props.content) return "";
 
   const rawHtml = marked.parse(props.content, {
     breaks: true,
     gfm: true,
-  })
+  });
 
   return DOMPurify.sanitize(rawHtml, {
     ALLOWED_TAGS: [
-      'p', 'br', 'hr',
-      'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-      'strong', 'b', 'em', 'i', 'del', 's', 'strike',
-      'a', 'img',
-      'ul', 'ol', 'li',
-      'blockquote', 'code', 'pre',
-      'table', 'thead', 'tbody', 'tr', 'th', 'td',
+      "p",
+      "br",
+      "hr",
+      "h1",
+      "h2",
+      "h3",
+      "h4",
+      "h5",
+      "h6",
+      "strong",
+      "b",
+      "em",
+      "i",
+      "del",
+      "s",
+      "strike",
+      "a",
+      "img",
+      "ul",
+      "ol",
+      "li",
+      "blockquote",
+      "code",
+      "pre",
+      "table",
+      "thead",
+      "tbody",
+      "tr",
+      "th",
+      "td",
     ],
     ALLOWED_ATTR: [
-      'href', 'title', 'target',
-      'src', 'alt', 'width', 'height',
-      'class', 'id',
+      "href",
+      "title",
+      "target",
+      "src",
+      "alt",
+      "width",
+      "height",
+      "class",
+      "id",
     ],
-  })
-})
+  });
+});
 </script>
 
 <template>
@@ -60,12 +89,24 @@ const renderedContent = computed(() => {
   line-height: 1.4;
 }
 
-.markdown-preview :deep(h1) { font-size: 2em; }
-.markdown-preview :deep(h2) { font-size: 1.5em; }
-.markdown-preview :deep(h3) { font-size: 1.25em; }
-.markdown-preview :deep(h4) { font-size: 1em; }
-.markdown-preview :deep(h5) { font-size: 0.875em; }
-.markdown-preview :deep(h6) { font-size: 0.85em; }
+.markdown-preview :deep(h1) {
+  font-size: 2em;
+}
+.markdown-preview :deep(h2) {
+  font-size: 1.5em;
+}
+.markdown-preview :deep(h3) {
+  font-size: 1.25em;
+}
+.markdown-preview :deep(h4) {
+  font-size: 1em;
+}
+.markdown-preview :deep(h5) {
+  font-size: 0.875em;
+}
+.markdown-preview :deep(h6) {
+  font-size: 0.85em;
+}
 
 .markdown-preview :deep(p) {
   margin-bottom: 16px;
@@ -86,7 +127,7 @@ const renderedContent = computed(() => {
   font-size: 85%;
   background-color: rgba(175, 184, 193, 0.2);
   border-radius: 6px;
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-family: "JetBrains Mono", "Fira Code", monospace;
 }
 
 .markdown-preview :deep(pre) {

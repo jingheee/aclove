@@ -1,5 +1,6 @@
 <script setup>
-import { ref, computed, h } from 'vue'
+import { ref, computed, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import {
   NCard,
   NSpace,
@@ -11,7 +12,7 @@ import {
   NAlert,
   NSpin,
   NModal,
-  NPopconfirm,
+  NEmpty,
 } from 'naive-ui'
 import {
   EyeOutline,
@@ -31,16 +32,20 @@ import { usePostStore } from '@/stores/post.js'
 const props = defineProps({
   postId: {
     type: [String, Number],
-    required: true,
+    default: null,
   },
 })
 
-const emit = defineEmits(['back', 'edit', 'delete'])
-
+const route = useRoute()
+const router = useRouter()
 const userStore = useUserStore()
 const postStore = usePostStore()
 
 const showDeleteConfirm = ref(false)
+
+const effectivePostId = computed(() => {
+  return props.postId || route.params.postId
+})
 
 const post = computed(() => postStore.currentPost)
 const loading = computed(() => postStore.loading)
@@ -84,7 +89,11 @@ function formatTimeAgo(dateString) {
 }
 
 function handleBack() {
-  emit('back')
+  if (post.value?.category_id) {
+    router.push({ name: 'category', params: { categoryId: post.value.category_id } })
+  } else {
+    router.push({ name: 'home' })
+  }
 }
 
 function handleEdit() {
@@ -97,191 +106,210 @@ function handleDelete() {
 
 async function confirmDelete() {
   try {
-    await postStore.deletePost(props.postId)
+    await postStore.deletePost(effectivePostId.value)
     showDeleteConfirm.value = false
-    emit('delete', post.value)
+    handleBack()
   } catch (err) {
     console.error('删除失败:', err)
   }
 }
+
+async function loadPost() {
+  if (effectivePostId.value) {
+    await postStore.fetchPostDetail(effectivePostId.value)
+  }
+}
+
+watch(() => effectivePostId.value, () => {
+  loadPost()
+}, { immediate: true })
+
+const emit = defineEmits(['edit'])
 </script>
 
 <template>
-  <div class="post-detail">
-    <NButton
-      quaternary
-      class="back-btn"
-      @click="handleBack"
-    >
-      <template #icon>
-        <NIcon>
-          <ArrowBackOutline />
-        </NIcon>
-      </template>
-      返回列表
-    </NButton>
+  <div class="content-container">
+    <div class="post-detail">
+      <NButton
+        quaternary
+        class="back-btn"
+        @click="handleBack"
+      >
+        <template #icon>
+          <NIcon>
+            <ArrowBackOutline />
+          </NIcon>
+        </template>
+        返回列表
+      </NButton>
 
-    <NAlert
-      v-if="error"
-      type="error"
-      closable
-      class="error-alert"
-      @close="postStore.error = null"
-    >
-      {{ error }}
-    </NAlert>
+      <NAlert
+        v-if="error"
+        type="error"
+        closable
+        class="error-alert"
+        @close="postStore.error = null"
+      >
+        {{ error }}
+      </NAlert>
 
-    <NSpin :show="loading && !post">
-      <template v-if="post">
-        <NCard class="detail-card">
-          <div class="detail-header">
-            <div class="header-top">
-              <NSpace align="center" :size="12">
-                <NTag type="info" size="small">
-                  匿名用户
-                </NTag>
-                <NText depth="3" class="time-text">
-                  <NIcon size="14">
-                    <TimeOutline />
-                  </NIcon>
-                  {{ formatTimeAgo(post.created_at) }}
-                </NText>
-                <NText v-if="isEdited" depth="3" class="edited-text">
-                  (已编辑 {{ post.edit_count }} 次)
-                </NText>
-              </NSpace>
+      <NSpin :show="loading && !post">
+        <template v-if="post">
+          <NCard class="detail-card">
+            <div class="detail-header">
+              <div class="header-top">
+                <NSpace align="center" :size="12">
+                  <NTag type="info" size="small">
+                    匿名用户
+                  </NTag>
+                  <NText depth="3" class="time-text">
+                    <NIcon size="14">
+                      <TimeOutline />
+                    </NIcon>
+                    {{ formatTimeAgo(post.created_at) }}
+                  </NText>
+                  <NText v-if="isEdited" depth="3" class="edited-text">
+                    (已编辑 {{ post.edit_count }} 次)
+                  </NText>
+                </NSpace>
 
-              <NSpace v-if="isAuthor">
-                <NButton
-                  quaternary
-                  size="small"
-                  @click="handleEdit"
-                >
-                  <template #icon>
-                    <NIcon>
+                <NSpace v-if="isAuthor">
+                  <NButton
+                    quaternary
+                    size="small"
+                    @click="handleEdit"
+                  >
+                    <template #icon>
+                      <NIcon>
+                        <CreateOutline />
+                      </NIcon>
+                    </template>
+                    编辑
+                  </NButton>
+                  <NButton
+                    quaternary
+                    size="small"
+                    type="error"
+                    @click="handleDelete"
+                  >
+                    <template #icon>
+                      <NIcon>
+                        <TrashOutline />
+                      </NIcon>
+                    </template>
+                    删除
+                  </NButton>
+                </NSpace>
+              </div>
+
+              <h1 class="detail-title">{{ post.title }}</h1>
+
+              <div class="meta-info">
+                <NSpace :size="20">
+                  <NText depth="3" class="meta-item">
+                    <NIcon size="16">
+                      <CalendarOutline />
+                    </NIcon>
+                    发布于 {{ formatDate(post.created_at) }}
+                  </NText>
+                  <NText v-if="isEdited" depth="3" class="meta-item">
+                    <NIcon size="16">
                       <CreateOutline />
                     </NIcon>
-                  </template>
-                  编辑
-                </NButton>
-                <NButton
-                  quaternary
-                  size="small"
-                  type="error"
-                  @click="handleDelete"
-                >
+                    最后编辑于 {{ formatDate(post.last_edited_at) }}
+                  </NText>
+                </NSpace>
+              </div>
+            </div>
+
+            <NDivider />
+
+            <div class="detail-content">
+              <MarkdownPreview :content="post.content" />
+            </div>
+
+            <NDivider />
+
+            <div class="detail-footer">
+              <NSpace align="center" :size="24">
+                <NButton quaternary>
                   <template #icon>
                     <NIcon>
-                      <TrashOutline />
+                      <ThumbsUpOutline />
                     </NIcon>
                   </template>
-                  删除
+                  {{ post.upvote_count || 0 }}
                 </NButton>
+
+                <NButton quaternary>
+                  <template #icon>
+                    <NIcon>
+                      <ThumbsDownOutline />
+                    </NIcon>
+                  </template>
+                  {{ post.downvote_count || 0 }}
+                </NButton>
+
+                <NText depth="3" class="stat-item">
+                  <NIcon size="16">
+                    <EyeOutline />
+                  </NIcon>
+                  {{ post.view_count || 0 }} 浏览
+                </NText>
+
+                <NText depth="3" class="stat-item">
+                  <NIcon size="16">
+                    <ChatbubbleOutline />
+                  </NIcon>
+                  {{ post.reply_count || 0 }} 回复
+                </NText>
               </NSpace>
             </div>
+          </NCard>
 
-            <h1 class="detail-title">{{ post.title }}</h1>
-
-            <div class="meta-info">
-              <NSpace :size="20">
-                <NText depth="3" class="meta-item">
-                  <NIcon size="16">
-                    <CalendarOutline />
-                  </NIcon>
-                  发布于 {{ formatDate(post.created_at) }}
-                </NText>
-                <NText v-if="isEdited" depth="3" class="meta-item">
-                  <NIcon size="16">
-                    <CreateOutline />
-                  </NIcon>
-                  最后编辑于 {{ formatDate(post.last_edited_at) }}
-                </NText>
-              </NSpace>
-            </div>
-          </div>
-
-          <NDivider />
-
-          <div class="detail-content">
-            <MarkdownPreview :content="post.content" />
-          </div>
-
-          <NDivider />
-
-          <div class="detail-footer">
-            <NSpace align="center" :size="24">
-              <NButton quaternary>
-                <template #icon>
-                  <NIcon>
-                    <ThumbsUpOutline />
-                  </NIcon>
-                </template>
-                {{ post.upvote_count || 0 }}
-              </NButton>
-
-              <NButton quaternary>
-                <template #icon>
-                  <NIcon>
-                    <ThumbsDownOutline />
-                  </NIcon>
-                </template>
-                {{ post.downvote_count || 0 }}
-              </NButton>
-
-              <NText depth="3" class="stat-item">
-                <NIcon size="16">
-                  <EyeOutline />
-                </NIcon>
-                {{ post.view_count || 0 }} 浏览
-              </NText>
-
-              <NText depth="3" class="stat-item">
-                <NIcon size="16">
-                  <ChatbubbleOutline />
-                </NIcon>
-                {{ post.reply_count || 0 }} 回复
-              </NText>
-            </NSpace>
-          </div>
-        </NCard>
-
-        <NCard title="评论" class="comments-card">
-          <NEmpty description="评论功能即将上线，敬请期待" />
-        </NCard>
-      </template>
-
-      <NEmpty
-        v-else-if="!loading"
-        description="帖子不存在或已被删除"
-        class="empty-state"
-      >
-        <template #extra>
-          <NButton @click="handleBack">
-            返回列表
-          </NButton>
+          <NCard title="评论" class="comments-card">
+            <NEmpty description="评论功能即将上线，敬请期待" />
+          </NCard>
         </template>
-      </NEmpty>
-    </NSpin>
 
-    <NModal
-      v-model:show="showDeleteConfirm"
-      preset="dialog"
-      title="确认删除"
-      type="warning"
-      positive-text="确认删除"
-      negative-text="取消"
-      @positive-click="confirmDelete"
-    >
-      确定要删除这篇帖子吗？此操作不可恢复。
-    </NModal>
+        <NEmpty
+          v-else-if="!loading"
+          description="帖子不存在或已被删除"
+          class="empty-state"
+        >
+          <template #extra>
+            <NButton @click="handleBack">
+              返回列表
+            </NButton>
+          </template>
+        </NEmpty>
+      </NSpin>
+
+      <NModal
+        v-model:show="showDeleteConfirm"
+        preset="dialog"
+        title="确认删除"
+        type="warning"
+        positive-text="确认删除"
+        negative-text="取消"
+        @positive-click="confirmDelete"
+      >
+        确定要删除这篇帖子吗？此操作不可恢复。
+      </NModal>
+    </div>
   </div>
 </template>
 
 <style scoped>
+.content-container {
+  padding: 24px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
 .post-detail {
   max-width: 900px;
   margin: 0 auto;
-  padding: 16px;
 }
 
 .back-btn {

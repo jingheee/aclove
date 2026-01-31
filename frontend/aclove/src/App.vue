@@ -1,5 +1,6 @@
 <script setup>
-import { h, ref, computed, onUnmounted, onMounted, watch } from "vue";
+import { h, ref, computed, onMounted } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import { useQuery } from "@tanstack/vue-query";
 import {
   NLayout,
@@ -9,37 +10,25 @@ import {
   NButton,
   NIcon,
   NAvatar,
-  NSpace,
-  NCard,
-  NGradientText,
-  NDivider,
   NModal,
 } from "naive-ui";
 import {
   LayersOutline,
   MoonOutline,
   SunnyOutline,
-  HeartOutline,
-  SparklesOutline,
   HomeOutline,
 } from "@vicons/ionicons5";
 import { baseFetch } from "@/api/client.js";
 import { useUserStore } from "@/stores/user.js";
-import { usePostStore } from "@/stores/post.js";
-import PostList from "@/components/post/PostList.vue";
-import PostDetail from "@/components/post/PostDetail.vue";
 import PostEditor from "@/components/post/PostEditor.vue";
 import mikuLogo from "@/assets/logo/miku.svg?url";
 
+const route = useRoute();
+const router = useRouter();
 const userStore = useUserStore();
-const postStore = usePostStore();
 
 const collapsed = ref(false);
-const activeKey = ref("home");
 const isDark = ref(false);
-const currentView = ref("home");
-const selectedCategoryId = ref(null);
-const viewingPostId = ref(null);
 const editingPost = ref(null);
 const showEditor = ref(false);
 
@@ -57,7 +46,9 @@ function toggleTheme() {
 }
 
 function categoryToMenuItem(category, parentKey = "") {
-  const key = parentKey ? `${parentKey}-${category.id}` : `category-${category.id}`;
+  const key = parentKey
+    ? `${parentKey}-${category.id}`
+    : `category-${category.id}`;
   const children =
     category.children && category.children.length > 0
       ? category.children.map((child) => categoryToMenuItem(child, key))
@@ -97,16 +88,40 @@ const menuOptions = computed(() => {
   return [...baseOptions, ...categoryOptions];
 });
 
-function handleMenuUpdate(key) {
-  activeKey.value = key;
+const activeKey = computed(() => {
+  if (route.name === "home") {
+    return "home";
+  }
+  if (route.name === "category" && route.params.categoryId) {
+    return findCategoryKey(route.params.categoryId, categories.value);
+  }
+  return null;
+});
 
+function findCategoryKey(categoryId, categoryList, parentKey = "") {
+  if (!categoryList) return null;
+
+  for (const cat of categoryList) {
+    const currentKey = parentKey
+      ? `${parentKey}-${cat.id}`
+      : `category-${cat.id}`;
+    if (String(cat.id) === String(categoryId)) {
+      return currentKey;
+    }
+    if (cat.children && cat.children.length > 0) {
+      const found = findCategoryKey(categoryId, cat.children, currentKey);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+function handleMenuUpdate(key) {
   if (key === "home") {
-    currentView.value = "home";
-    selectedCategoryId.value = null;
+    router.push({ name: "home" });
   } else if (key.startsWith("category-")) {
     const categoryId = extractCategoryId(key);
-    selectedCategoryId.value = categoryId;
-    currentView.value = "category";
+    router.push({ name: "category", params: { categoryId } });
   }
 }
 
@@ -115,37 +130,17 @@ function extractCategoryId(key) {
   return parts[parts.length - 1];
 }
 
-function handleCreatePost(categoryId) {
-  selectedCategoryId.value = categoryId;
+function handleCreatePost() {
   editingPost.value = null;
   showEditor.value = true;
-}
-
-function handleViewPost(post) {
-  viewingPostId.value = post.id;
-  postStore.fetchPostDetail(post.id);
-  currentView.value = "detail";
-}
-
-function handleEditPost(post) {
-  editingPost.value = post;
-  showEditor.value = true;
-}
-
-function handleDeletePost(post) {
-  postStore.deletePost(post.id);
 }
 
 function handleEditorSubmit(post) {
   showEditor.value = false;
   editingPost.value = null;
 
-  if (currentView.value === "detail" && post.id) {
-    postStore.fetchPostDetail(post.id);
-  } else if (post.id) {
-    viewingPostId.value = post.id;
-    postStore.fetchPostDetail(post.id);
-    currentView.value = "detail";
+  if (post.id) {
+    router.push({ name: "post-detail", params: { postId: post.id } });
   }
 }
 
@@ -154,24 +149,7 @@ function handleEditorCancel() {
   editingPost.value = null;
 }
 
-function handleBackFromDetail() {
-  if (selectedCategoryId.value) {
-    currentView.value = "category";
-  } else {
-    currentView.value = "home";
-  }
-  viewingPostId.value = null;
-}
 
-function handleBackFromDelete() {
-  handleBackFromDetail();
-  postStore.resetPosts();
-  if (selectedCategoryId.value) {
-    currentView.value = "category";
-  } else {
-    currentView.value = "home";
-  }
-}
 </script>
 
 <template>
@@ -215,67 +193,9 @@ function handleBackFromDelete() {
     </NLayoutSider>
 
     <NLayoutContent class="app-content">
-      <div v-if="currentView === 'home'" class="home-container">
-        <NCard class="welcome-card" :bordered="false">
-          <div class="welcome-content">
-            <NSpace vertical align="center" :size="24">
-              <div class="icon-wrapper">
-                <NIcon size="80" :depth="1">
-                  <HeartOutline />
-                </NIcon>
-              </div>
-
-              <NGradientText
-                :size="48"
-                :font-size="48"
-                :weight="800"
-                type="linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
-              >
-                欢迎来到aclove匿名版
-              </NGradientText>
-
-              <NDivider />
-
-              <NText :depth="2" class="subtitle">
-                <NSpace vertical align="center" :size="12">
-                  <span>你所热爱的就是你的生活</span>
-                  <NIcon :depth="3" size="24">
-                    <SparklesOutline />
-                  </NIcon>
-                </NSpace>
-              </NText>
-
-              <NSpace :size="16" style="margin-top: 24px">
-                <NButton type="primary" size="large" @click="currentView = 'category'">
-                  浏览帖子
-                </NButton>
-                <NButton size="large" @click="handleCreatePost">
-                  发布帖子
-                </NButton>
-              </NSpace>
-            </NSpace>
-          </div>
-        </NCard>
-      </div>
-
-      <div v-else-if="currentView === 'category'" class="content-container">
-        <PostList
-          :category-id="selectedCategoryId"
-          @create-post="handleCreatePost"
-          @view-post="handleViewPost"
-          @edit-post="handleEditPost"
-          @delete-post="handleDeletePost"
-        />
-      </div>
-
-      <div v-else-if="currentView === 'detail'" class="content-container">
-        <PostDetail
-          :post-id="viewingPostId"
-          @back="handleBackFromDetail"
-          @edit="handleEditPost"
-          @delete="handleBackFromDelete"
-        />
-      </div>
+      <router-view v-slot="{ Component }">
+        <component :is="Component" @create-post="handleCreatePost" />
+      </router-view>
 
       <NModal
         v-model:show="showEditor"
@@ -285,7 +205,7 @@ function handleBackFromDelete() {
         :mask-closable="false"
       >
         <PostEditor
-          :category-id="selectedCategoryId"
+          :category-id="route.params.categoryId"
           :edit-mode="!!editingPost"
           :post-id="editingPost?.id"
           :initial-data="editingPost"
@@ -374,7 +294,9 @@ function handleBackFromDelete() {
   width: 100%;
   border-radius: 24px;
   box-shadow: 0 12px 48px rgba(0, 0, 0, 0.1);
-  transition: transform 0.4s ease, box-shadow 0.4s ease;
+  transition:
+    transform 0.4s ease,
+    box-shadow 0.4s ease;
 }
 
 .welcome-card:hover {
@@ -399,12 +321,20 @@ function handleBackFromDelete() {
   width: 128px;
   height: 128px;
   border-radius: 50%;
-  background: linear-gradient(135deg, rgba(102, 126, 234, 0.12) 0%, rgba(118, 75, 162, 0.12) 100%);
+  background: linear-gradient(
+    135deg,
+    rgba(102, 126, 234, 0.12) 0%,
+    rgba(118, 75, 162, 0.12) 100%
+  );
   margin: 0 auto;
 }
 
 .dark .icon-wrapper {
-  background: linear-gradient(135deg, rgba(102, 126, 234, 0.2) 0%, rgba(118, 75, 162, 0.2) 100%);
+  background: linear-gradient(
+    135deg,
+    rgba(102, 126, 234, 0.2) 0%,
+    rgba(118, 75, 162, 0.2) 100%
+  );
 }
 
 .subtitle {

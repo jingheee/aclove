@@ -1,109 +1,133 @@
 <script setup>
-import { h, computed } from "vue";
+import { h } from "vue";
+import { useRouter } from "vue-router";
 import {
   NCard,
   NSpace,
-  NText,
-  NDivider,
-  NGrid,
-  NGridItem,
   NButton,
   NIcon,
-  NSpin,
-  NEmpty,
-  NTag,
+  NGradientText,
+  NDivider,
+  NText,
 } from "naive-ui";
-import {
-  HomeOutline,
-  AnalyticsOutline,
-  BookOutline,
-  PeopleOutline,
-  LayersOutline,
-  CreateOutline,
-  TrashOutline,
-  RefreshOutline,
-  AddCircleOutline,
-} from "@vicons/ionicons5";
+import { HeartOutline, SparklesOutline } from "@vicons/ionicons5";
 
-const props = defineProps({
-  categories: {
-    type: Array,
-    default: () => [],
-  },
-  loading: {
-    type: Boolean,
-    default: false,
-  },
-});
+const router = useRouter();
 
-const emit = defineEmits(["refresh-categories"]);
+const emit = defineEmits(["create-post"]);
 
-const statCards = computed(() => [
-  {
-    title: "分类总数",
-    value: props.categories.length,
-    icon: LayersOutline,
-    color: "#18a058",
-  },
-  {
-    title: "用户数量",
-    value: 0,
-    icon: PeopleOutline,
-    color: "#2080f0",
-  },
-  {
-    title: "数据条目",
-    value: 0,
-    icon: BookOutline,
-    color: "#f0a020",
-  },
-  {
-    title: "访问量",
-    value: 0,
-    icon: AnalyticsOutline,
-    color: "#d03050",
-  },
-]);
+function handleBrowsePosts() {
+  router.push({ name: "category", params: { categoryId: "all" } });
+}
 
-const quickActions = [
-  { label: "新建分类", icon: AddCircleOutline, type: "primary" },
-  { label: "导入数据", icon: CreateOutline, type: "default" },
-  { label: "导出报表", icon: AnalyticsOutline, type: "default" },
-];
-
-function renderIcon(icon) {
-  return () => h(NIcon, null, { default: () => h(icon) });
+function handleCreatePost() {
+  emit("create-post");
 }
 </script>
 
 <template>
   <div class="home-container">
+    <NCard class="welcome-card" :bordered="false">
+      <div class="welcome-content">
+        <NSpace vertical align="center" :size="24">
+          <div class="icon-wrapper">
+            <NIcon size="80" :depth="1">
+              <HeartOutline />
+            </NIcon>
+          </div>
 
-    <NDivider />
-    <NDivider />
+          <NGradientText
+            :size="48"
+            :font-size="48"
+            :weight="800"
+            type="linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
+          >
+            欢迎来到aclove匿名版
+          </NGradientText>
+
+          <NDivider />
+
+          <NText :depth="2" class="subtitle">
+            <NSpace vertical align="center" :size="12">
+              <span>你所热爱的就是你的生活</span>
+              <NIcon :depth="3" size="24">
+                <SparklesOutline />
+              </NIcon>
+            </NSpace>
+          </NText>
+
+          <NSpace :size="16" style="margin-top: 24px">
+            <NButton type="primary" size="large" @click="handleBrowsePosts">
+              浏览帖子
+            </NButton>
+            <NButton size="large" @click="handleCreatePost"> 发布帖子 </NButton>
+          </NSpace>
+        </NSpace>
+      </div>
+    </NCard>
   </div>
 </template>
 
 <style scoped>
 .home-container {
-  max-width: 1400px;
-  margin: 0 auto;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  padding: 40px 24px;
 }
 
 .welcome-card {
-  border-radius: 12px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+  max-width: 800px;
+  width: 100%;
+  border-radius: 24px;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.1);
+  transition:
+    transform 0.4s ease,
+    box-shadow 0.4s ease;
+}
+
+.welcome-card:hover {
+  transform: translateY(-8px);
+  box-shadow: 0 20px 64px rgba(0, 0, 0, 0.16);
 }
 
 .dark .welcome-card {
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
+  background: rgba(30, 30, 46, 0.85);
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.4);
 }
 
 .welcome-content {
-  padding: 8px 0;
+  padding: 64px 48px;
+  text-align: center;
 }
 
-.quick-actions {
-  margin-top: 16px;
+.icon-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 128px;
+  height: 128px;
+  border-radius: 50%;
+  background: linear-gradient(
+    135deg,
+    rgba(102, 126, 234, 0.12) 0%,
+    rgba(118, 75, 162, 0.12) 100%
+  );
+  margin: 0 auto;
+}
+
+.dark .icon-wrapper {
+  background: linear-gradient(
+    135deg,
+    rgba(102, 126, 234, 0.2) 0%,
+    rgba(118, 75, 162, 0.2) 100%
+  );
+}
+
+.subtitle {
+  font-size: 28px;
+  line-height: 1.8;
+  letter-spacing: 3px;
 }
 </style>
