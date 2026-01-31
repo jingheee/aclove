@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"net/http"
 	"strconv"
 
 	"io.lazydoge/aclove/models"
@@ -21,22 +20,22 @@ func NewCategoryHandler(svc *service.CategoryService) *CategoryHandler {
 func (h *CategoryHandler) Create(c *gin.Context) {
 	var req models.CreateCategoryRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的请求数据", "details": err.Error()})
+		models.JSONBadRequest(c, "无效的请求数据")
 		return
 	}
 
 	if err := h.svc.ValidateParentID(c.Request.Context(), req.ParentID); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		models.JSONBadRequest(c, err.Error())
 		return
 	}
 
 	category, err := h.svc.CreateCategory(c.Request.Context(), &req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "创建分类失败", "details": err.Error()})
+		models.JSONInternalError(c, "创建分类失败")
 		return
 	}
 
-	c.JSON(http.StatusCreated, models.CategoryToResponse(category))
+	models.JSONCreated(c, models.CategoryToResponse(category))
 }
 
 func (h *CategoryHandler) Get(c *gin.Context) (*models.CategoryResponse, error) {
@@ -81,16 +80,16 @@ func (h *CategoryHandler) Update(c *gin.Context) (*models.CategoryResponse, erro
 func (h *CategoryHandler) Delete(c *gin.Context) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的分类ID"})
+		models.JSONBadRequest(c, "无效的分类ID")
 		return
 	}
 
 	if err := h.svc.DeleteCategory(c.Request.Context(), id); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "删除分类失败", "details": err.Error()})
+		models.JSONInternalError(c, "删除分类失败")
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "删除成功"})
+	models.JSONSuccessWithMsg(c, "删除成功", nil)
 }
 
 
@@ -99,7 +98,7 @@ func (h *CategoryHandler) GetChildren(c *gin.Context) {
 	if c.Param("id") != "" {
 		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "无效的分类ID"})
+			models.JSONBadRequest(c, "无效的分类ID")
 			return
 		}
 		parentID = &id
@@ -107,7 +106,7 @@ func (h *CategoryHandler) GetChildren(c *gin.Context) {
 
 	categories, err := h.svc.GetChildren(c.Request.Context(), parentID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "查询子分类失败", "details": err.Error()})
+		models.JSONInternalError(c, "查询子分类失败")
 		return
 	}
 
@@ -116,15 +115,15 @@ func (h *CategoryHandler) GetChildren(c *gin.Context) {
 		response[i] = models.CategoryToResponse(category)
 	}
 
-	c.JSON(http.StatusOK, response)
+	models.JSONSuccess(c, response)
 }
 
 func (h *CategoryHandler) GetTree(c *gin.Context) {
 	tree, err := h.svc.GetCategoryTree(c.Request.Context())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "获取分类树失败", "details": err.Error()})
+		models.JSONInternalError(c, "获取分类树失败")
 		return
 	}
 
-	c.JSON(http.StatusOK, tree)
+	models.JSONSuccess(c, tree)
 }

@@ -23,7 +23,7 @@ func Setup(
 	postHandler *handlers.PostHandler,
 ) {
 	router.GET("/health", func(c *gin.Context) {
-		c.JSON(200, gin.H{"status": "ok"})
+		models.JSONSuccess(c, gin.H{"status": "ok"})
 	})
 
 	sessionMiddleware := middleware.NewSessionMiddleware(sessionManager)
@@ -68,28 +68,28 @@ func wrapCategoryGet(h *handlers.CategoryHandler, c *cache.Cache) gin.HandlerFun
 	return func(ctx *gin.Context) {
 		id, err := parseCategoryID(ctx)
 		if err != nil {
-			ctx.JSON(400, gin.H{"error": "无效的分类ID"})
+			models.JSONBadRequest(ctx, "无效的分类ID")
 			return
 		}
 
 		var cachedResp models.CategoryResponse
 		if err := c.Get(ctx.Request.Context(), id, &cachedResp); err == nil && cachedResp.ID != 0 {
-			ctx.JSON(200, cachedResp)
+			models.JSONSuccess(ctx, cachedResp)
 			return
 		}
 
 		category, err := h.Get(ctx)
 		if err != nil {
-			ctx.JSON(404, gin.H{"error": "分类不存在"})
+			models.JSONNotFound(ctx, "分类不存在")
 			return
 		}
 
 		if err := c.Set(ctx.Request.Context(), id, category, 0); err != nil {
-			ctx.JSON(500, gin.H{"error": "设置缓存失败"})
+			models.JSONInternalError(ctx, "设置缓存失败")
 			return
 		}
 
-		ctx.JSON(200, category)
+		models.JSONSuccess(ctx, category)
 	}
 }
 
@@ -97,22 +97,22 @@ func wrapCategoryUpdate(h *handlers.CategoryHandler, c *cache.Cache) gin.Handler
 	return func(ctx *gin.Context) {
 		id, err := parseCategoryID(ctx)
 		if err != nil {
-			ctx.JSON(400, gin.H{"error": "无效的分类ID"})
+			models.JSONBadRequest(ctx, "无效的分类ID")
 			return
 		}
 
 		if err := c.Delete(ctx.Request.Context(), id); err != nil {
-			ctx.JSON(500, gin.H{"error": "删除缓存失败"})
+			models.JSONInternalError(ctx, "删除缓存失败")
 			return
 		}
 
 		category, err := h.Update(ctx)
 		if err != nil {
-			ctx.JSON(500, gin.H{"error": "更新分类失败"})
+			models.JSONInternalError(ctx, "更新分类失败")
 			return
 		}
 
-		ctx.JSON(200, category)
+		models.JSONSuccess(ctx, category)
 	}
 }
 

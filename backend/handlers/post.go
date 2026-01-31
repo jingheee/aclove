@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"errors"
-	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -24,13 +23,13 @@ func NewPostHandler(postService *service.PostService) *PostHandler {
 func (h *PostHandler) Create(c *gin.Context) {
 	user, exists := middleware.GetAnonymousUser(c)
 	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "请先获取会话"})
+		models.JSONUnauthorized(c, "请先获取会话")
 		return
 	}
 
 	var req models.CreatePostRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的请求数据", "details": err.Error()})
+		models.JSONBadRequest(c, "无效的请求数据")
 		return
 	}
 
@@ -41,75 +40,75 @@ func (h *PostHandler) Create(c *gin.Context) {
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrPostCooldown):
-			c.JSON(http.StatusTooManyRequests, gin.H{"error": "发帖过于频繁，请30秒后再试"})
+			models.JSONTooManyRequests(c, "发帖过于频繁，请30秒后再试")
 		case errors.Is(err, service.ErrDailyPostLimit):
-			c.JSON(http.StatusTooManyRequests, gin.H{"error": "今日发帖已达上限（50帖）"})
+			models.JSONTooManyRequests(c, "今日发帖已达上限（50帖）")
 		case errors.Is(err, service.ErrCategoryNotFound):
-			c.JSON(http.StatusBadRequest, gin.H{"error": "所选分类不存在"})
+			models.JSONBadRequest(c, "所选分类不存在")
 		default:
 			logger.Error("创建帖子失败", "error", err, "user_id", user.ID)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "创建帖子失败"})
+			models.JSONInternalError(c, "创建帖子失败")
 		}
 		return
 	}
 
-	c.JSON(http.StatusCreated, models.ToPostDetail(post, ""))
+	models.JSONCreated(c, models.ToPostDetail(post, ""))
 }
 
 func (h *PostHandler) Get(c *gin.Context) {
 	id, err := parsePostID(c)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的帖子ID"})
+		models.JSONBadRequest(c, "无效的帖子ID")
 		return
 	}
 
 	post, err := h.postService.GetPostDetail(c.Request.Context(), id)
 	if err != nil {
 		if errors.Is(err, service.ErrPostNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "帖子不存在"})
+			models.JSONNotFound(c, "帖子不存在")
 			return
 		}
 		logger.Error("获取帖子详情失败", "error", err, "post_id", id)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "获取帖子详情失败"})
+		models.JSONInternalError(c, "获取帖子详情失败")
 		return
 	}
 
-	c.JSON(http.StatusOK, post)
+	models.JSONSuccess(c, post)
 }
 
 func (h *PostHandler) List(c *gin.Context) {
 	var query models.ListPostsQuery
 	if err := c.ShouldBindQuery(&query); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的查询参数", "details": err.Error()})
+		models.JSONBadRequest(c, "无效的查询参数")
 		return
 	}
 
 	response, err := h.postService.ListPosts(c.Request.Context(), &query)
 	if err != nil {
 		logger.Error("获取帖子列表失败", "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "获取帖子列表失败"})
+		models.JSONInternalError(c, "获取帖子列表失败")
 		return
 	}
 
-	c.JSON(http.StatusOK, response)
+	models.JSONSuccess(c, response)
 }
 
 func (h *PostHandler) Update(c *gin.Context) {
 	user, exists := middleware.GetAnonymousUser(c)
 	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "请先获取会话"})
+		models.JSONUnauthorized(c, "请先获取会话")
 		return
 	}
 
 	id, err := parsePostID(c)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的帖子ID"})
+		models.JSONBadRequest(c, "无效的帖子ID")
 		return
 	}
 
 	var req models.UpdatePostRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的请求数据", "details": err.Error()})
+		models.JSONBadRequest(c, "无效的请求数据")
 		return
 	}
 
@@ -117,29 +116,29 @@ func (h *PostHandler) Update(c *gin.Context) {
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrPostNotFound):
-			c.JSON(http.StatusNotFound, gin.H{"error": "帖子不存在"})
+			models.JSONNotFound(c, "帖子不存在")
 		case errors.Is(err, service.ErrNotPostAuthor):
-			c.JSON(http.StatusForbidden, gin.H{"error": "只有作者可以编辑帖子"})
+			models.JSONForbidden(c, "只有作者可以编辑帖子")
 		default:
 			logger.Error("更新帖子失败", "error", err, "post_id", id, "user_id", user.ID)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "更新帖子失败"})
+			models.JSONInternalError(c, "更新帖子失败")
 		}
 		return
 	}
 
-	c.JSON(http.StatusOK, models.ToPostDetail(post, ""))
+	models.JSONSuccess(c, models.ToPostDetail(post, ""))
 }
 
 func (h *PostHandler) Delete(c *gin.Context) {
 	user, exists := middleware.GetAnonymousUser(c)
 	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "请先获取会话"})
+		models.JSONUnauthorized(c, "请先获取会话")
 		return
 	}
 
 	id, err := parsePostID(c)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的帖子ID"})
+		models.JSONBadRequest(c, "无效的帖子ID")
 		return
 	}
 
@@ -152,17 +151,17 @@ func (h *PostHandler) Delete(c *gin.Context) {
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrPostNotFound):
-			c.JSON(http.StatusNotFound, gin.H{"error": "帖子不存在"})
+			models.JSONNotFound(c, "帖子不存在")
 		case errors.Is(err, service.ErrNotPostAuthor):
-			c.JSON(http.StatusForbidden, gin.H{"error": "只有作者可以删除帖子"})
+			models.JSONForbidden(c, "只有作者可以删除帖子")
 		default:
 			logger.Error("删除帖子失败", "error", err, "post_id", id, "user_id", user.ID)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "删除帖子失败"})
+			models.JSONInternalError(c, "删除帖子失败")
 		}
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "删除成功"})
+	models.JSONSuccessWithMsg(c, "删除成功", nil)
 }
 
 func parsePostID(c *gin.Context) (int64, error) {

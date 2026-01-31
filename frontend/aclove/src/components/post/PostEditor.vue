@@ -67,7 +67,7 @@ const categoryRules = [
 
 async function fetchCategories() {
   const response = await baseFetch('/categories')
-  return Array.isArray(response) ? response : []
+  return response || []
 }
 
 const { data: categories, isLoading: categoriesLoading } = useQuery({
