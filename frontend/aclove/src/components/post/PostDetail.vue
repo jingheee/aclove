@@ -30,7 +30,7 @@ import { usePostStore } from '@/stores/post.js'
 
 const props = defineProps({
   postId: {
-    type: Number,
+    type: [String, Number],
     required: true,
   },
 })

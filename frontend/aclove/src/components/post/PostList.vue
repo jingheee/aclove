@@ -18,7 +18,7 @@ import { usePostStore } from '@/stores/post.js'
 
 const props = defineProps({
   categoryId: {
-    type: Number,
+    type: [String, Number],
     default: null,
   },
 })

@@ -1,20 +1,52 @@
-import { baseFetch } from "./client.js";
+import { useQuery, useQueryClient } from '@tanstack/vue-query'
+import { baseFetch } from './client.js'
+import { queryKeys } from './queryKeys.js'
 
-/**
- * 获取当前用户信息（验证 session 和 cookie）
- * @returns {Promise<UserInfo>}
- */
-export async function fetchCurrentUser() {
-  return baseFetch("/users/me", {
-    credentials: "include",
-  });
+const USER_STATUS = {
+  ACTIVE: 'active',
+  BANNED: 'banned',
+  COOLDOWN: 'cooldown',
 }
 
-/**
- * @typedef {Object} UserInfo
- * @property {number} id - 用户ID
- * @property {string} status - 用户状态 (active/banned/cooldown)
- * @property {string} [status_reason] - 状态原因
- * @property {string} [banned_until] - 封禁截止时间
- * @property {string} [cooldown_until] - 冷却截止时间
- */
+async function fetchCurrentUser() {
+  return baseFetch('/users/me')
+}
+
+function useCurrentUserQuery(options = {}) {
+  return useQuery({
+    queryKey: queryKeys.users.me(),
+    queryFn: fetchCurrentUser,
+    staleTime: 1000 * 60 * 5,
+    ...options,
+  })
+}
+
+function usePrefetchCurrentUser() {
+  const queryClient = useQueryClient()
+
+  return () => {
+    queryClient.prefetchQuery({
+      queryKey: queryKeys.users.me(),
+      queryFn: fetchCurrentUser,
+      staleTime: 1000 * 60 * 5,
+    })
+  }
+}
+
+function useInvalidateCurrentUser() {
+  const queryClient = useQueryClient()
+
+  return () => {
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.users.me(),
+    })
+  }
+}
+
+export {
+  USER_STATUS,
+  fetchCurrentUser,
+  useCurrentUserQuery,
+  usePrefetchCurrentUser,
+  useInvalidateCurrentUser,
+}

@@ -19,7 +19,7 @@ export const usePostStore = defineStore('post', () => {
     loading.value = true
     error.value = null
     try {
-      const response = await postApi.getPosts({
+      const response = await postApi.fetchPosts({
         page: currentPage.value,
         page_size: pageSize.value,
         ...params,
@@ -40,7 +40,7 @@ export const usePostStore = defineStore('post', () => {
     loading.value = true
     try {
       currentPage.value++
-      const response = await postApi.getPosts({
+      const response = await postApi.fetchPosts({
         page: currentPage.value,
         page_size: pageSize.value,
         ...params,
@@ -59,7 +59,7 @@ export const usePostStore = defineStore('post', () => {
     loading.value = true
     error.value = null
     try {
-      const response = await postApi.getPost(id)
+      const response = await postApi.fetchPost(id)
       currentPost.value = response
       return response
     } catch (err) {
@@ -90,7 +90,7 @@ export const usePostStore = defineStore('post', () => {
     loading.value = true
     error.value = null
     try {
-      const response = await postApi.updatePost(id, data)
+      const response = await postApi.updatePost({ id, data })
       const index = posts.value.findIndex(p => p.id === id)
       if (index !== -1) {
         posts.value[index] = { ...posts.value[index], ...response }
@@ -111,7 +111,7 @@ export const usePostStore = defineStore('post', () => {
     loading.value = true
     error.value = null
     try {
-      await postApi.deletePost(id, reason)
+      await postApi.deletePost({ id, reason })
       posts.value = posts.value.filter(p => p.id !== id)
       total.value--
       if (currentPost.value?.id === id) {

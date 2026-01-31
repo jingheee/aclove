@@ -18,7 +18,7 @@ import { baseFetch } from '@/api/client.js'
 
 const props = defineProps({
   categoryId: {
-    type: Number,
+    type: [String, Number],
     default: null,
   },
   editMode: {
@@ -26,7 +26,7 @@ const props = defineProps({
     default: false,
   },
   postId: {
-    type: Number,
+    type: [String, Number],
     default: null,
   },
   initialData: {

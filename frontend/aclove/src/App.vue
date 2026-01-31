@@ -112,7 +112,7 @@ function handleMenuUpdate(key) {
 
 function extractCategoryId(key) {
   const parts = key.split("-");
-  return parseInt(parts[parts.length - 1], 10);
+  return parts[parts.length - 1];
 }
 
 function handleCreatePost(categoryId) {

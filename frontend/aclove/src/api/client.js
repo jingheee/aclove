@@ -1,5 +1,14 @@
 const API_BASE_URL = '/api'
 
+class ApiError extends Error {
+  constructor(message, status, data) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+    this.data = data
+  }
+}
+
 async function baseFetch(endpoint, options = {}) {
   const url = `${API_BASE_URL}${endpoint}`
 
@@ -15,11 +24,15 @@ async function baseFetch(endpoint, options = {}) {
   const response = await fetch(url, config)
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({}))
-    throw new Error(error.message || `HTTP Error: ${response.status}`)
+    const errorData = await response.json().catch(() => ({}))
+    throw new ApiError(
+      errorData.message || `HTTP Error: ${response.status}`,
+      response.status,
+      errorData
+    )
   }
 
   return response.json()
 }
 
-export { baseFetch, API_BASE_URL }
+export { baseFetch, API_BASE_URL, ApiError }
