@@ -19,6 +19,7 @@
     "bytemd": "^1.22.0",
     "dompurify": "^3.3.1",
     "github-markdown-css": "^5.8.1",
+    "json-bigint": "^1.0.0",
     "marked": "^17.0.1",
     "naive-ui": "^2.43.2",
     "pinia": "^3.0.4",

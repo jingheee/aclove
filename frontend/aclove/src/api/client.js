@@ -1,3 +1,5 @@
+import JSONbig from "json-bigint";
+
 const API_BASE_URL = "/api";
 
 class ApiError extends Error {
@@ -60,7 +62,15 @@ async function baseFetch(endpoint, options = {}) {
 
   const response = await fetch(url, config);
 
-  const data = await response.json().catch(() => null);
+  const contentType = response.headers.get("content-type") || "";
+  let data = null;
+
+  if (contentType.includes("application/json")) {
+    const text = await response.text();
+    data = text ? JSONbig.parse(text) : null;
+  } else {
+    data = await response.blob();
+  }
 
   if (!response.ok) {
     const message = data?.message || `HTTP Error: ${response.status}`;
