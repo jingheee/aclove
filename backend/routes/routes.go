@@ -21,6 +21,7 @@ func Setup(
 	anonymousUserHandler *handlers.AnonymousUserHandler,
 	sessionManager *session.Manager,
 	postHandler *handlers.PostHandler,
+	uploadHandler *handlers.UploadHandler,
 ) {
 	router.GET("/health", func(c *gin.Context) {
 		models.JSONSuccess(c, gin.H{"status": "ok"})
@@ -60,6 +61,15 @@ func Setup(
 			posts.POST("", sessionMiddleware.Handler(), requireActiveUser, postHandler.Create)
 			posts.PUT("/:id", sessionMiddleware.Handler(), requireActiveUser, postHandler.Update)
 			posts.DELETE("/:id", sessionMiddleware.Handler(), requireActiveUser, postHandler.Delete)
+		}
+
+		upload := api.Group("/upload")
+		{
+			upload.POST("/image", sessionMiddleware.Handler(), requireActiveUser, uploadHandler.UploadImage)
+			upload.POST("/file", sessionMiddleware.Handler(), requireActiveUser, uploadHandler.UploadFile)
+			upload.DELETE("/file", sessionMiddleware.Handler(), uploadHandler.DeleteFile)
+			upload.GET("/stats", uploadHandler.GetStats)
+			upload.GET("/health", uploadHandler.HealthCheck)
 		}
 	}
 }

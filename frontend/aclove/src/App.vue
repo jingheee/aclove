@@ -20,7 +20,7 @@ import {
 } from "@vicons/ionicons5";
 import { baseFetch } from "@/api/client.js";
 import { useUserStore } from "@/stores/user.js";
-import PostEditor from "@/components/post/PostEditor.vue";
+import RichPostEditor from "@/components/post/RichPostEditor.vue";
 import mikuLogo from "@/assets/logo/miku.svg?url";
 
 const route = useRoute();
@@ -204,7 +204,7 @@ function handleEditorCancel() {
         style="width: 900px; max-width: 95vw"
         :mask-closable="false"
       >
-        <PostEditor
+        <RichPostEditor
           :category-id="route.params.categoryId"
           :edit-mode="!!editingPost"
           :post-id="editingPost?.id"

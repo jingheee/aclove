@@ -15,6 +15,19 @@ type Config struct {
 	Database DatabaseConfig `yaml:"database"`
 	Redis    RedisConfig    `yaml:"redis"`
 	Session  SessionConfig  `yaml:"session"`
+	Storage  StorageConfig  `yaml:"storage"`
+}
+
+type StorageConfig struct {
+	RustFS RustFSConfig `yaml:"rustfs"`
+}
+
+type RustFSConfig struct {
+	BaseURL       string `yaml:"base_url"`
+	Username      string `yaml:"username"`
+	Password      string `yaml:"password"`
+	MaxFileSize   int64  `yaml:"max_file_size"`    // 字节
+	MaxConcurrent int    `yaml:"max_concurrent"`   // 最大并发上传数
 }
 
 type RedisConfig struct {
@@ -148,6 +161,13 @@ func (c *Config) setDefaults() {
 	}
 	if c.Session.CookieSameSite == "" {
 		c.Session.CookieSameSite = "Lax"
+	}
+	// Storage defaults
+	if c.Storage.RustFS.MaxFileSize == 0 {
+		c.Storage.RustFS.MaxFileSize = 50 * 1024 * 1024 // 50MB
+	}
+	if c.Storage.RustFS.MaxConcurrent == 0 {
+		c.Storage.RustFS.MaxConcurrent = 10
 	}
 }
 

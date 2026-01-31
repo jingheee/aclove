@@ -29,3 +29,11 @@ session:
   cookie_secure: false
   cookie_http_only: true
   cookie_same_site: "Lax"
+
+storage:
+  rustfs:
+    base_url: "${RUSTFS_BASE_URL:http://localhost:8080}"
+    username: "${RUSTFS_USERNAME:rustfsadmin}"
+    password: "${RUSTFS_PASSWORD:rustfsadmin}"
+    max_file_size: 52428800  # 50MB
+    max_concurrent: 10

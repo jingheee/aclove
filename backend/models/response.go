@@ -106,3 +106,8 @@ func JSONTooManyRequests(c *gin.Context, message string) {
 func JSONInternalError(c *gin.Context, message string) {
 	c.JSON(http.StatusInternalServerError, NewErrorResponse(message))
 }
+
+// JSONServiceUnavailable 返回503错误响应
+func JSONServiceUnavailable(c *gin.Context, message string) {
+	c.JSON(http.StatusServiceUnavailable, NewErrorResponse(message))
+}

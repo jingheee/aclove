@@ -21,6 +21,7 @@ import (
 	"io.lazydoge/aclove/routes"
 	"io.lazydoge/aclove/service"
 	"io.lazydoge/aclove/session"
+	"io.lazydoge/aclove/storage/rustfs"
 )
 
 func main() {
@@ -118,7 +119,20 @@ func main() {
 	postSvc := service.NewPostService(postRepo, categoryRepo, redisClient)
 	postHandler := handlers.NewPostHandler(postSvc)
 
-	routes.Setup(router, categoryHandler, categoryCache, anonymousUserSvc, anonymousUserHandler, sessionManager, postHandler)
+	// Initialize RustFS storage
+	rustfsClient := rustfs.NewClient(rustfs.Config{
+		BaseURL:  cfg.Storage.RustFS.BaseURL,
+		Username: cfg.Storage.RustFS.Username,
+		Password: cfg.Storage.RustFS.Password,
+	})
+	storageService := rustfs.NewService(rustfs.ServiceConfig{
+		Client:        rustfsClient,
+		MaxFileSize:   cfg.Storage.RustFS.MaxFileSize,
+		MaxConcurrent: cfg.Storage.RustFS.MaxConcurrent,
+	})
+	uploadHandler := handlers.NewUploadHandler(storageService)
+
+	routes.Setup(router, categoryHandler, categoryCache, anonymousUserSvc, anonymousUserHandler, sessionManager, postHandler, uploadHandler)
 
 	addr := fmt.Sprintf("%s:%d", cfg.App.Host, cfg.App.Port)
 	logger.Info("服务器启动", "address", addr)
