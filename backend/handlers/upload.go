@@ -11,16 +11,16 @@ import (
 	"io.lazydoge/aclove/logger"
 	"io.lazydoge/aclove/middleware"
 	"io.lazydoge/aclove/models"
-	"io.lazydoge/aclove/storage/rustfs"
+	"io.lazydoge/aclove/storage/minio"
 )
 
 // UploadHandler 文件上传处理器
 type UploadHandler struct {
-	storageService *rustfs.Service
+	storageService *minio.Service
 }
 
 // NewUploadHandler 创建上传处理器
-func NewUploadHandler(storageService *rustfs.Service) *UploadHandler {
+func NewUploadHandler(storageService *minio.Service) *UploadHandler {
 	return &UploadHandler{
 		storageService: storageService,
 	}
@@ -60,12 +60,12 @@ func (h *UploadHandler) UploadImage(c *gin.Context) {
 	result, err := h.storageService.UploadImage(c.Request.Context(), header.Filename, file, header.Size)
 	if err != nil {
 		switch {
-		case err == rustfs.ErrFileTooLarge:
+		case err == minio.ErrFileTooLarge:
 			models.JSONBadRequest(c, "文件过大")
-		case err == rustfs.ErrInvalidFileType:
+		case err == minio.ErrInvalidFileType:
 			models.JSONBadRequest(c, "不支持的文件类型")
-		case err == rustfs.ErrServiceUnavailable:
-			logger.Error("RustFS 服务不可用", "error", err)
+		case err == minio.ErrServiceUnavailable:
+			logger.Error("MinIO 服务不可用", "error", err)
 			models.JSONServiceUnavailable(c, "文件存储服务暂时不可用，请稍后重试")
 		default:
 			logger.Error("上传图片失败", "error", err, "user_id", user.ID, "filename", header.Filename)
@@ -117,12 +117,12 @@ func (h *UploadHandler) UploadFile(c *gin.Context) {
 	result, err := h.storageService.UploadFile(c.Request.Context(), header.Filename, file, header.Size)
 	if err != nil {
 		switch {
-		case err == rustfs.ErrFileTooLarge:
+		case err == minio.ErrFileTooLarge:
 			models.JSONBadRequest(c, "文件过大")
-		case err == rustfs.ErrInvalidFileType:
+		case err == minio.ErrInvalidFileType:
 			models.JSONBadRequest(c, "不支持的文件类型")
-		case err == rustfs.ErrServiceUnavailable:
-			logger.Error("RustFS 服务不可用", "error", err)
+		case err == minio.ErrServiceUnavailable:
+			logger.Error("MinIO 服务不可用", "error", err)
 			models.JSONServiceUnavailable(c, "文件存储服务暂时不可用，请稍后重试")
 		default:
 			logger.Error("上传文件失败", "error", err, "user_id", user.ID, "filename", header.Filename)

@@ -31,9 +31,12 @@ session:
   cookie_same_site: "Lax"
 
 storage:
-  rustfs:
-    base_url: "${RUSTFS_BASE_URL:http://localhost:8080}"
-    username: "${RUSTFS_USERNAME:rustfsadmin}"
-    password: "${RUSTFS_PASSWORD:rustfsadmin}"
-    max_file_size: 52428800  # 50MB
+  minio:
+    endpoint: "http://localhost:9000"
+    bucket: "aclove"
+    access_key_id: "root"      # 默认为 root
+    secret_access_key: "root12345"  # 默认为 root
+    region: "us-east-1"
+    public_url: "http://localhost:9000"
+    max_file_size: 52428800
     max_concurrent: 10

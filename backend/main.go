@@ -21,7 +21,7 @@ import (
 	"io.lazydoge/aclove/routes"
 	"io.lazydoge/aclove/service"
 	"io.lazydoge/aclove/session"
-	"io.lazydoge/aclove/storage/rustfs"
+	"io.lazydoge/aclove/storage/minio"
 )
 
 func main() {
@@ -119,16 +119,22 @@ func main() {
 	postSvc := service.NewPostService(postRepo, categoryRepo, redisClient)
 	postHandler := handlers.NewPostHandler(postSvc)
 
-	// Initialize RustFS storage
-	rustfsClient := rustfs.NewClient(rustfs.Config{
-		BaseURL:  cfg.Storage.RustFS.BaseURL,
-		Username: cfg.Storage.RustFS.Username,
-		Password: cfg.Storage.RustFS.Password,
+	// Initialize MinIO storage
+	minioClient, err := minio.NewClient(minio.Config{
+		Endpoint:        cfg.Storage.MinIO.Endpoint,
+		Bucket:          cfg.Storage.MinIO.Bucket,
+		AccessKeyID:     cfg.Storage.MinIO.AccessKeyID,
+		SecretAccessKey: cfg.Storage.MinIO.SecretAccessKey,
+		Region:          cfg.Storage.MinIO.Region,
+		PublicURL:       cfg.Storage.MinIO.PublicURL,
 	})
-	storageService := rustfs.NewService(rustfs.ServiceConfig{
-		Client:        rustfsClient,
-		MaxFileSize:   cfg.Storage.RustFS.MaxFileSize,
-		MaxConcurrent: cfg.Storage.RustFS.MaxConcurrent,
+	if err != nil {
+		logger.Fatal("创建MinIO客户端失败", "error", err)
+	}
+	storageService := minio.NewService(minio.ServiceConfig{
+		Client:        minioClient,
+		MaxFileSize:   cfg.Storage.MinIO.MaxFileSize,
+		MaxConcurrent: cfg.Storage.MinIO.MaxConcurrent,
 	})
 	uploadHandler := handlers.NewUploadHandler(storageService)
 

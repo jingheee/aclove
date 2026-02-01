@@ -19,15 +19,18 @@ type Config struct {
 }
 
 type StorageConfig struct {
-	RustFS RustFSConfig `yaml:"rustfs"`
+	MinIO MinIOConfig `yaml:"minio"`
 }
 
-type RustFSConfig struct {
-	BaseURL       string `yaml:"base_url"`
-	Username      string `yaml:"username"`
-	Password      string `yaml:"password"`
-	MaxFileSize   int64  `yaml:"max_file_size"`    // 字节
-	MaxConcurrent int    `yaml:"max_concurrent"`   // 最大并发上传数
+type MinIOConfig struct {
+	Endpoint        string `yaml:"endpoint"`
+	Bucket          string `yaml:"bucket"`
+	AccessKeyID     string `yaml:"access_key_id"`
+	SecretAccessKey string `yaml:"secret_access_key"`
+	Region          string `yaml:"region"`
+	PublicURL       string `yaml:"public_url"`
+	MaxFileSize     int64  `yaml:"max_file_size"`  // 字节
+	MaxConcurrent   int    `yaml:"max_concurrent"` // 最大并发上传数
 }
 
 type RedisConfig struct {
@@ -163,11 +166,11 @@ func (c *Config) setDefaults() {
 		c.Session.CookieSameSite = "Lax"
 	}
 	// Storage defaults
-	if c.Storage.RustFS.MaxFileSize == 0 {
-		c.Storage.RustFS.MaxFileSize = 50 * 1024 * 1024 // 50MB
+	if c.Storage.MinIO.MaxFileSize == 0 {
+		c.Storage.MinIO.MaxFileSize = 50 * 1024 * 1024 // 50MB
 	}
-	if c.Storage.RustFS.MaxConcurrent == 0 {
-		c.Storage.RustFS.MaxConcurrent = 10
+	if c.Storage.MinIO.MaxConcurrent == 0 {
+		c.Storage.MinIO.MaxConcurrent = 10
 	}
 }
 
