@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"io.lazydoge/aclove/jsonutil"
 )
 
 // ResponseCode 响应状态码类型
@@ -59,55 +60,55 @@ func NewErrorResponseWithCode(code ResponseCode, message string) *Response {
 
 // JSONSuccess 返回成功JSON响应
 func JSONSuccess(c *gin.Context, data any) {
-	c.JSON(http.StatusOK, NewSuccessResponse(data))
+	jsonutil.JSON200(c, NewSuccessResponse(data))
 }
 
 // JSONSuccessWithMsg 返回带自定义消息的成功JSON响应
 func JSONSuccessWithMsg(c *gin.Context, message string, data any) {
-	c.JSON(http.StatusOK, NewSuccessResponseWithMsg(message, data))
+	jsonutil.JSON200(c, NewSuccessResponseWithMsg(message, data))
 }
 
 // JSONCreated 返回创建成功响应 (201)
 func JSONCreated(c *gin.Context, data any) {
-	c.JSON(http.StatusCreated, NewSuccessResponse(data))
+	jsonutil.JSON201(c, NewSuccessResponse(data))
 }
 
 // JSONError 返回错误JSON响应
 func JSONError(c *gin.Context, httpStatus int, message string) {
-	c.JSON(httpStatus, NewErrorResponse(message))
+	jsonutil.JSON(c, httpStatus, NewErrorResponse(message))
 }
 
 // JSONBadRequest 返回400错误响应
 func JSONBadRequest(c *gin.Context, message string) {
-	c.JSON(http.StatusBadRequest, NewErrorResponse(message))
+	jsonutil.JSON400(c, NewErrorResponse(message))
 }
 
 // JSONUnauthorized 返回401错误响应
 func JSONUnauthorized(c *gin.Context, message string) {
-	c.JSON(http.StatusUnauthorized, NewErrorResponse(message))
+	jsonutil.JSON401(c, NewErrorResponse(message))
 }
 
 // JSONForbidden 返回403错误响应
 func JSONForbidden(c *gin.Context, message string) {
-	c.JSON(http.StatusForbidden, NewErrorResponse(message))
+	jsonutil.JSON403(c, NewErrorResponse(message))
 }
 
 // JSONNotFound 返回404错误响应
 func JSONNotFound(c *gin.Context, message string) {
-	c.JSON(http.StatusNotFound, NewErrorResponse(message))
+	jsonutil.JSON404(c, NewErrorResponse(message))
 }
 
 // JSONTooManyRequests 返回429错误响应
 func JSONTooManyRequests(c *gin.Context, message string) {
-	c.JSON(http.StatusTooManyRequests, NewErrorResponse(message))
+	jsonutil.JSON(c, http.StatusTooManyRequests, NewErrorResponse(message))
 }
 
 // JSONInternalError 返回500错误响应
 func JSONInternalError(c *gin.Context, message string) {
-	c.JSON(http.StatusInternalServerError, NewErrorResponse(message))
+	jsonutil.JSON500(c, NewErrorResponse(message))
 }
 
 // JSONServiceUnavailable 返回503错误响应
 func JSONServiceUnavailable(c *gin.Context, message string) {
-	c.JSON(http.StatusServiceUnavailable, NewErrorResponse(message))
+	jsonutil.JSON(c, http.StatusServiceUnavailable, NewErrorResponse(message))
 }

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"io.lazydoge/aclove/jsonutil"
 	"io.lazydoge/aclove/logger"
 )
 
@@ -31,11 +32,11 @@ type ServiceConfig struct {
 
 // UploadResult 上传结果
 type UploadResult struct {
-	URL         string `json:"url"`
-	Key         string `json:"key"`
-	Size        int64  `json:"size"`
-	ContentType string `json:"content_type"`
-	Filename    string `json:"filename"`
+	URL         string         `json:"url"`
+	Key         string         `json:"key"`
+	Size        jsonutil.Int64 `json:"size"`
+	ContentType string         `json:"content_type"`
+	Filename    string         `json:"filename"`
 }
 
 // NewService 创建文件存储服务
@@ -160,9 +161,9 @@ func (s *Service) DeleteFile(ctx context.Context, fileURL string) error {
 // GetStats 获取存储统计
 func (s *Service) GetStats() map[string]interface{} {
 	return map[string]interface{}{
-		"max_file_size":   s.maxFileSize,
-		"max_concurrent":  cap(s.uploadSem),
-		"allowed_types":   s.allowedTypes,
+		"max_file_size":  s.maxFileSize,
+		"max_concurrent": cap(s.uploadSem),
+		"allowed_types":  s.allowedTypes,
 	}
 }
 
@@ -170,7 +171,7 @@ func (s *Service) upload(ctx context.Context, filename string, content io.Reader
 	s.uploadSem <- struct{}{}
 	defer func() { <-s.uploadSem }()
 
-	resp, err := s.client.Upload(ctx, filename, content, contentType)
+	resp, err := s.client.Upload(ctx, filename, content, size, contentType)
 	if err != nil {
 		return nil, err
 	}

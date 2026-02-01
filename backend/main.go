@@ -15,6 +15,7 @@ import (
 	"io.lazydoge/aclove/config"
 	"io.lazydoge/aclove/database"
 	"io.lazydoge/aclove/handlers"
+	"io.lazydoge/aclove/jsonutil"
 	"io.lazydoge/aclove/logger"
 	"io.lazydoge/aclove/models/query"
 	"io.lazydoge/aclove/repository"
@@ -47,6 +48,7 @@ func main() {
 		logger.Fatal("初始化数据库失败", "error", err)
 	}
 
+	jsonutil.EnableCustomJSONBinding()
 	router := gin.Default()
 
 	corsConfig := cors.DefaultConfig()

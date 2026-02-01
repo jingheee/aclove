@@ -17,6 +17,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/smithy-go"
 
+	"io.lazydoge/aclove/jsonutil"
 	"io.lazydoge/aclove/logger"
 )
 
@@ -55,20 +56,20 @@ type Config struct {
 
 // UploadResponse 上传响应
 type UploadResponse struct {
-	Success bool   `json:"success"`
-	URL     string `json:"url"`
-	Key     string `json:"key"`
-	Size    int64  `json:"size"`
-	Error   string `json:"error,omitempty"`
+	Success bool           `json:"success"`
+	URL     string         `json:"url"`
+	Key     string         `json:"key"`
+	Size    jsonutil.Int64 `json:"size"`
+	Error   string         `json:"error,omitempty"`
 }
 
 // FileInfo 文件信息
 type FileInfo struct {
-	Key          string    `json:"key"`
-	Size         int64     `json:"size"`
-	ContentType  string    `json:"content_type"`
-	LastModified time.Time `json:"last_modified"`
-	URL          string    `json:"url"`
+	Key          string         `json:"key"`
+	Size         jsonutil.Int64 `json:"size"`
+	ContentType  string         `json:"content_type"`
+	LastModified time.Time      `json:"last_modified"`
+	URL          string         `json:"url"`
 }
 
 // NewClient 创建 MinIO 客户端
@@ -102,116 +103,124 @@ func NewClient(cfg Config) (*Client, error) {
 		return nil, fmt.Errorf("加载 AWS 配置失败: %w", err)
 	}
 
-	client := s3.NewFromConfig(awsCfg, func(o *s3.Options) {
-		o.BaseEndpoint = aws.String(cfg.Endpoint)
-		o.UsePathStyle = true
+	// 解析 endpoint
+	endpoint := cfg.Endpoint
+	if endpoint == "" {
+		endpoint = "http://localhost:9000"
+	}
+
+	// 创建 S3 客户端（兼容 MinIO）
+	s3Client := s3.NewFromConfig(awsCfg, func(o *s3.Options) {
+		o.BaseEndpoint = aws.String(endpoint)
+		o.UsePathStyle = true // MinIO 需要使用 path-style
 	})
 
 	publicURL := cfg.PublicURL
 	if publicURL == "" {
-		publicURL = cfg.Endpoint
+		publicURL = endpoint
 	}
 
-	return &Client{
-		s3Client:  client,
+	client := &Client{
+		s3Client:  s3Client,
 		bucket:    cfg.Bucket,
-		baseURL:   strings.TrimSuffix(cfg.Endpoint, "/"),
-		publicURL: strings.TrimSuffix(publicURL, "/"),
-	}, nil
+		baseURL:   endpoint,
+		publicURL: publicURL,
+	}
+
+	// 确保 bucket 存在
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+	defer cancel()
+
+	_, err = s3Client.HeadBucket(ctx, &s3.HeadBucketInput{
+		Bucket: aws.String(cfg.Bucket),
+	})
+	if err != nil {
+		var apiErr smithy.APIError
+		if errors.As(err, &apiErr) {
+			if apiErr.ErrorCode() == "NotFound" {
+				// 创建 bucket
+				_, err = s3Client.CreateBucket(ctx, &s3.CreateBucketInput{
+					Bucket: aws.String(cfg.Bucket),
+				})
+				if err != nil {
+					return nil, fmt.Errorf("创建 bucket 失败: %w", err)
+				}
+				logger.Info("创建 bucket 成功", "bucket", cfg.Bucket)
+			} else {
+				return nil, fmt.Errorf("检查 bucket 失败: %w", err)
+			}
+		}
+	}
+
+	return client, nil
 }
 
 // Upload 上传文件
-func (c *Client) Upload(ctx context.Context, filename string, content io.Reader, contentType string) (*UploadResponse, error) {
-	// 确保存储桶存在
-	if err := c.ensureBucket(ctx); err != nil {
-		return nil, err
-	}
-
-	key := c.GenerateKey(filename)
-
+func (c *Client) Upload(ctx context.Context, key string, content io.Reader, size int64, contentType string) (*UploadResponse, error) {
 	if contentType == "" {
 		contentType = defaultContentType
 	}
 
-	data, err := io.ReadAll(content)
-	if err != nil {
-		return nil, fmt.Errorf("读取文件内容失败: %w", err)
-	}
+	ctx, cancel := context.WithTimeout(ctx, defaultTimeout)
+	defer cancel()
 
-	_, err = c.s3Client.PutObject(ctx, &s3.PutObjectInput{
-		Bucket:      aws.String(c.bucket),
-		Key:         aws.String(key),
-		Body:        bytes.NewReader(data),
-		ContentType: aws.String(contentType),
+	_, err := c.s3Client.PutObject(ctx, &s3.PutObjectInput{
+		Bucket:        aws.String(c.bucket),
+		Key:           aws.String(key),
+		Body:          content,
+		ContentLength: aws.Int64(size),
+		ContentType:   aws.String(contentType),
 	})
 	if err != nil {
-		logger.Error("MinIO 上传失败", "key", key, "error", err)
-		return nil, fmt.Errorf("上传失败: %w", err)
+		return &UploadResponse{
+			Success: false,
+			Error:   fmt.Sprintf("上传失败: %v", err),
+		}, fmt.Errorf("上传文件失败: %w", err)
 	}
-
-	logger.Info("MinIO 上传成功", "filename", filename, "key", key, "size", len(data))
 
 	return &UploadResponse{
 		Success: true,
 		URL:     c.GetPublicURL(key),
 		Key:     key,
-		Size:    int64(len(data)),
+		Size:    jsonutil.Int64(size),
 	}, nil
 }
 
-// ensureBucket 确保存储桶存在，不存在则自动创建
-func (c *Client) ensureBucket(ctx context.Context) error {
-	exists, err := c.BucketExists(ctx)
-	if err != nil {
-		return fmt.Errorf("检查存储桶失败: %w", err)
-	}
-	if !exists {
-		if err := c.CreateBucket(ctx); err != nil {
-			return fmt.Errorf("创建存储桶失败: %w", err)
-		}
-		logger.Info("MinIO 存储桶已自动创建", "bucket", c.bucket)
-	}
-	return nil
-}
-
-// UploadBytes 上传字节数据
-func (c *Client) UploadBytes(ctx context.Context, filename string, data []byte, contentType string) (*UploadResponse, error) {
-	return c.Upload(ctx, filename, bytes.NewReader(data), contentType)
+// GetPublicURL 获取文件的公开访问 URL
+func (c *Client) GetPublicURL(key string) string {
+	u, _ := url.Parse(c.publicURL)
+	u.Path = path.Join(u.Path, c.bucket, key)
+	return u.String()
 }
 
 // Delete 删除文件
 func (c *Client) Delete(ctx context.Context, key string) error {
+	ctx, cancel := context.WithTimeout(ctx, defaultTimeout)
+	defer cancel()
+
 	_, err := c.s3Client.DeleteObject(ctx, &s3.DeleteObjectInput{
 		Bucket: aws.String(c.bucket),
 		Key:    aws.String(key),
 	})
 	if err != nil {
-		logger.Error("MinIO 删除失败", "key", key, "error", err)
-		return fmt.Errorf("删除失败: %w", err)
+		return fmt.Errorf("删除文件失败: %w", err)
 	}
 
-	logger.Info("MinIO 删除成功", "key", key)
 	return nil
-}
-
-// DeleteByURL 通过 URL 删除文件
-func (c *Client) DeleteByURL(ctx context.Context, fileURL string) error {
-	key, err := c.ExtractKeyFromURL(fileURL)
-	if err != nil {
-		return err
-	}
-	return c.Delete(ctx, key)
 }
 
 // GetFileInfo 获取文件信息
 func (c *Client) GetFileInfo(ctx context.Context, key string) (*FileInfo, error) {
+	ctx, cancel := context.WithTimeout(ctx, defaultTimeout)
+	defer cancel()
+
 	result, err := c.s3Client.HeadObject(ctx, &s3.HeadObjectInput{
 		Bucket: aws.String(c.bucket),
 		Key:    aws.String(key),
 	})
 	if err != nil {
-		var apiErr *smithy.OperationError
-		if errors.As(err, &apiErr) {
+		var apiErr smithy.APIError
+		if errors.As(err, &apiErr) && apiErr.ErrorCode() == "NotFound" {
 			return nil, ErrFileNotFound
 		}
 		return nil, fmt.Errorf("获取文件信息失败: %w", err)
@@ -227,167 +236,220 @@ func (c *Client) GetFileInfo(ctx context.Context, key string) (*FileInfo, error)
 		lastModified = *result.LastModified
 	}
 
+	size := int64(0)
+	if result.ContentLength != nil {
+		size = *result.ContentLength
+	}
+
 	return &FileInfo{
 		Key:          key,
-		Size:         aws.ToInt64(result.ContentLength),
+		Size:         jsonutil.Int64(size),
 		ContentType:  contentType,
 		LastModified: lastModified,
 		URL:          c.GetPublicURL(key),
 	}, nil
 }
 
-// GetPublicURL 获取公开访问 URL
-func (c *Client) GetPublicURL(key string) string {
-	return fmt.Sprintf("%s/%s/%s", c.publicURL, c.bucket, key)
-}
+// GenerateKey 生成文件存储 key
+func (c *Client) GenerateKey(filename string) string {
+	ext := path.Ext(filename)
+	name := strings.TrimSuffix(filename, ext)
+	// 清理文件名中的特殊字符
+	name = strings.ReplaceAll(name, " ", "_")
+	name = strings.ReplaceAll(name, "/", "_")
+	name = strings.ReplaceAll(name, "\\", "_")
 
-// IsHealthy 检查服务健康状态
-func (c *Client) IsHealthy(ctx context.Context) bool {
-	_, err := c.s3Client.ListBuckets(ctx, &s3.ListBucketsInput{})
-	return err == nil
-}
-
-// ExtractKeyFromURL 从 URL 中提取文件 key
-func (c *Client) ExtractKeyFromURL(fileURL string) (string, error) {
-	parsedURL, err := url.Parse(fileURL)
-	if err != nil {
-		return "", fmt.Errorf("解析 URL 失败: %w", err)
-	}
-
-	expectedPrefix := "/" + c.bucket + "/"
-	if !strings.HasPrefix(parsedURL.Path, expectedPrefix) {
-		return "", fmt.Errorf("无效的 MinIO URL 格式")
-	}
-
-	key := strings.TrimPrefix(parsedURL.Path, expectedPrefix)
-	key, err = url.PathUnescape(key)
-	if err != nil {
-		return "", fmt.Errorf("解码 key 失败: %w", err)
-	}
-
-	return key, nil
-}
-
-// GenerateKey 生成存储 key
-func (c *Client) GenerateKey(originalName string) string {
-	ext := path.Ext(originalName)
+	// 添加时间戳避免冲突
 	timestamp := time.Now().UnixNano()
-	random := generateRandomString(8)
-
-	name := strings.TrimSuffix(originalName, ext)
-	name = sanitizeFilename(name)
-
-	return fmt.Sprintf("%s/%d_%s%s", time.Now().Format("2006/01/02"), timestamp, random, ext)
+	return fmt.Sprintf("%s_%d%s", name, timestamp, ext)
 }
 
-// ListObjects 列出存储桶中的对象
-func (c *Client) ListObjects(ctx context.Context, prefix string, maxKeys int32) ([]FileInfo, error) {
+// GetPresignedURL 获取预签名 URL（用于临时访问）
+func (c *Client) GetPresignedURL(ctx context.Context, key string, expiry time.Duration) (string, error) {
+	presignClient := s3.NewPresignClient(c.s3Client)
+
+	req, err := presignClient.PresignGetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(c.bucket),
+		Key:    aws.String(key),
+	}, s3.WithPresignExpires(expiry))
+	if err != nil {
+		return "", fmt.Errorf("生成预签名 URL 失败: %w", err)
+	}
+
+	return req.URL, nil
+}
+
+// Download 下载文件
+func (c *Client) Download(ctx context.Context, key string) (io.ReadCloser, int64, error) {
+	ctx, cancel := context.WithTimeout(ctx, defaultTimeout)
+	defer cancel()
+
+	result, err := c.s3Client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(c.bucket),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		var apiErr smithy.APIError
+		if errors.As(err, &apiErr) && apiErr.ErrorCode() == "NoSuchKey" {
+			return nil, 0, ErrFileNotFound
+		}
+		return nil, 0, fmt.Errorf("下载文件失败: %w", err)
+	}
+
+	size := int64(0)
+	if result.ContentLength != nil {
+		size = *result.ContentLength
+	}
+
+	return result.Body, size, nil
+}
+
+// Copy 复制文件
+func (c *Client) Copy(ctx context.Context, sourceKey, destKey string) error {
+	ctx, cancel := context.WithTimeout(ctx, defaultTimeout)
+	defer cancel()
+
+	source := fmt.Sprintf("%s/%s", c.bucket, sourceKey)
+	_, err := c.s3Client.CopyObject(ctx, &s3.CopyObjectInput{
+		Bucket:     aws.String(c.bucket),
+		CopySource: aws.String(url.PathEscape(source)),
+		Key:        aws.String(destKey),
+	})
+	if err != nil {
+		return fmt.Errorf("复制文件失败: %w", err)
+	}
+
+	return nil
+}
+
+// ListFiles 列出文件
+func (c *Client) ListFiles(ctx context.Context, prefix string, maxKeys int32) ([]FileInfo, error) {
 	if maxKeys <= 0 {
 		maxKeys = 1000
 	}
 
-	input := &s3.ListObjectsV2Input{
-		Bucket:  aws.String(c.bucket),
-		MaxKeys: aws.Int32(maxKeys),
-	}
-	if prefix != "" {
-		input.Prefix = aws.String(prefix)
-	}
+	ctx, cancel := context.WithTimeout(ctx, defaultTimeout)
+	defer cancel()
 
-	result, err := c.s3Client.ListObjectsV2(ctx, input)
+	result, err := c.s3Client.ListObjectsV2(ctx, &s3.ListObjectsV2Input{
+		Bucket:  aws.String(c.bucket),
+		Prefix:  aws.String(prefix),
+		MaxKeys: aws.Int32(maxKeys),
+	})
 	if err != nil {
-		return nil, fmt.Errorf("列出对象失败: %w", err)
+		return nil, fmt.Errorf("列出文件失败: %w", err)
 	}
 
 	files := make([]FileInfo, 0, len(result.Contents))
 	for _, obj := range result.Contents {
+		key := ""
+		if obj.Key != nil {
+			key = *obj.Key
+		}
+
+		size := int64(0)
+		if obj.Size != nil {
+			size = *obj.Size
+		}
+
+		lastModified := time.Time{}
+		if obj.LastModified != nil {
+			lastModified = *obj.LastModified
+		}
+
 		files = append(files, FileInfo{
-			Key:          aws.ToString(obj.Key),
-			Size:         aws.ToInt64(obj.Size),
-			LastModified: aws.ToTime(obj.LastModified),
-			URL:          c.GetPublicURL(aws.ToString(obj.Key)),
+			Key:          key,
+			Size:         jsonutil.Int64(size),
+			LastModified: lastModified,
+			URL:          c.GetPublicURL(key),
 		})
 	}
 
 	return files, nil
 }
 
-// GetObject 获取对象内容
-func (c *Client) GetObject(ctx context.Context, key string) (io.ReadCloser, *FileInfo, error) {
-	result, err := c.s3Client.GetObject(ctx, &s3.GetObjectInput{
+// IsExist 检查文件是否存在
+func (c *Client) IsExist(ctx context.Context, key string) (bool, error) {
+	ctx, cancel := context.WithTimeout(ctx, defaultTimeout)
+	defer cancel()
+
+	_, err := c.s3Client.HeadObject(ctx, &s3.HeadObjectInput{
 		Bucket: aws.String(c.bucket),
 		Key:    aws.String(key),
 	})
 	if err != nil {
-		var apiErr *smithy.OperationError
-		if errors.As(err, &apiErr) {
-			return nil, nil, ErrFileNotFound
-		}
-		return nil, nil, fmt.Errorf("获取对象失败: %w", err)
-	}
-
-	info := &FileInfo{
-		Key:          key,
-		Size:         aws.ToInt64(result.ContentLength),
-		ContentType:  aws.ToString(result.ContentType),
-		LastModified: aws.ToTime(result.LastModified),
-		URL:          c.GetPublicURL(key),
-	}
-
-	return result.Body, info, nil
-}
-
-// CreateBucket 创建存储桶
-func (c *Client) CreateBucket(ctx context.Context) error {
-	_, err := c.s3Client.CreateBucket(ctx, &s3.CreateBucketInput{
-		Bucket: aws.String(c.bucket),
-	})
-	if err != nil {
-		var apiErr *smithy.OperationError
-		if errors.As(err, &apiErr) {
-			return nil
-		}
-		return fmt.Errorf("创建存储桶失败: %w", err)
-	}
-	return nil
-}
-
-// BucketExists 检查存储桶是否存在
-func (c *Client) BucketExists(ctx context.Context) (bool, error) {
-	_, err := c.s3Client.HeadBucket(ctx, &s3.HeadBucketInput{
-		Bucket: aws.String(c.bucket),
-	})
-	if err != nil {
-		var apiErr *smithy.OperationError
-		if errors.As(err, &apiErr) {
+		var apiErr smithy.APIError
+		if errors.As(err, &apiErr) && apiErr.ErrorCode() == "NotFound" {
 			return false, nil
 		}
-		return false, fmt.Errorf("检查存储桶失败: %w", err)
+		return false, fmt.Errorf("检查文件存在性失败: %w", err)
 	}
+
 	return true, nil
 }
 
-func generateRandomString(length int) string {
-	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	b := make([]byte, length)
-	for i := range b {
-		b[i] = charset[time.Now().UnixNano()%int64(len(charset))]
+// ReadFile 读取文件内容到内存
+func (c *Client) ReadFile(ctx context.Context, key string) ([]byte, error) {
+	reader, size, err := c.Download(ctx, key)
+	if err != nil {
+		return nil, err
 	}
-	return string(b)
+	defer reader.Close()
+
+	// 限制最大读取 100MB
+	const maxSize = 100 * 1024 * 1024
+	if size > maxSize {
+		return nil, fmt.Errorf("文件太大，无法读取到内存: %d bytes", size)
+	}
+
+	buf := new(bytes.Buffer)
+	_, err = io.Copy(buf, reader)
+	if err != nil {
+		return nil, fmt.Errorf("读取文件内容失败: %w", err)
+	}
+
+	return buf.Bytes(), nil
 }
 
-func sanitizeFilename(name string) string {
-	replacer := strings.NewReplacer(
-		" ", "_",
-		"/", "_",
-		"\\", "_",
-		":", "_",
-		"*", "_",
-		"?", "_",
-		"\"", "_",
-		"<", "_",
-		">", "_",
-		"|", "_",
-	)
-	return replacer.Replace(name)
+// ExtractKeyFromURL 从 URL 提取 key
+func (c *Client) ExtractKeyFromURL(fileURL string) (string, error) {
+	u, err := url.Parse(fileURL)
+	if err != nil {
+		return "", fmt.Errorf("解析 URL 失败: %w", err)
+	}
+
+	// 移除 bucket 前缀
+	path := u.Path
+	prefix := "/" + c.bucket + "/"
+	if strings.HasPrefix(path, prefix) {
+		return path[len(prefix):], nil
+	}
+
+	// 如果没有 bucket 前缀，直接返回路径（去掉开头的 /）
+	if strings.HasPrefix(path, "/") {
+		return path[1:], nil
+	}
+
+	return path, nil
+}
+
+// IsHealthy 检查客户端是否健康
+func (c *Client) IsHealthy(ctx context.Context) bool {
+	ctx, cancel := context.WithTimeout(ctx, defaultTimeout)
+	defer cancel()
+
+	_, err := c.s3Client.HeadBucket(ctx, &s3.HeadBucketInput{
+		Bucket: aws.String(c.bucket),
+	})
+
+	return err == nil
+}
+
+// DeleteByURL 通过 URL 删除文件
+func (c *Client) DeleteByURL(ctx context.Context, fileURL string) error {
+	key, err := c.ExtractKeyFromURL(fileURL)
+	if err != nil {
+		return err
+	}
+	return c.Delete(ctx, key)
 }

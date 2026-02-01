@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"io.lazydoge/aclove/jsonutil"
 	"io.lazydoge/aclove/logger"
 	"io.lazydoge/aclove/models"
 	"io.lazydoge/aclove/models/query"
@@ -107,7 +108,7 @@ func (m *Manager) createNewSession(ctx context.Context, clientIP string, fingerp
 	}
 
 	userInfo := &UserInfo{
-		ID:              userDO.ID,
+		ID:              jsonutil.Int64(userDO.ID),
 		Cookie:          userDO.Cookie,
 		FingerprintHash: m.safeString(userDO.FingerprintHash),
 		IP:              userDO.IP,
@@ -183,7 +184,7 @@ func (m *Manager) UpdateUserInfo(ctx context.Context, userID int64, updateFn fun
 	for _, session := range sessions {
 		_, err := m.store.Update(ctx, session.ID, func(s *Session) error {
 			if s.UserInfo == nil {
-				s.UserInfo = &UserInfo{ID: userID}
+				s.UserInfo = &UserInfo{ID: jsonutil.Int64(userID)}
 			}
 			return updateFn(s.UserInfo)
 		})
@@ -196,7 +197,8 @@ func (m *Manager) UpdateUserInfo(ctx context.Context, userID int64, updateFn fun
 }
 
 func (m *Manager) Close() error {
-	return m.store.Close()
+	m.store.Close()
+	return nil
 }
 
 func (m *Manager) CookieConfig() (name string, maxAge int, domain string, secure bool, httpOnly bool, sameSite string) {

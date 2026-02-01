@@ -36,7 +36,7 @@ func (h *PostHandler) Create(c *gin.Context) {
 	clientIP := middleware.ExtractClientIP(c.Request.RemoteAddr)
 	userAgent := c.Request.UserAgent()
 
-	post, err := h.postService.CreatePost(c.Request.Context(), user.ID, &req, clientIP, userAgent)
+	post, err := h.postService.CreatePost(c.Request.Context(), int64(user.ID), &req, clientIP, userAgent)
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrPostCooldown):
@@ -112,7 +112,7 @@ func (h *PostHandler) Update(c *gin.Context) {
 		return
 	}
 
-	post, err := h.postService.UpdatePost(c.Request.Context(), id, user.ID, &req)
+	post, err := h.postService.UpdatePost(c.Request.Context(), id, int64(user.ID), &req)
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrPostNotFound):
@@ -147,7 +147,7 @@ func (h *PostHandler) Delete(c *gin.Context) {
 
 	isAdmin := false
 
-	err = h.postService.DeletePost(c.Request.Context(), id, user.ID, isAdmin, req.Reason)
+	err = h.postService.DeletePost(c.Request.Context(), id, int64(user.ID), isAdmin, req.Reason)
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrPostNotFound):

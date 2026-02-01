@@ -5,6 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"io.lazydoge/aclove/jsonutil"
 	"io.lazydoge/aclove/logger"
 	"io.lazydoge/aclove/session"
 )
@@ -37,29 +38,29 @@ func (m *SessionMiddleware) Handler() gin.HandlerFunc {
 		sess, err := m.manager.GetOrCreateSession(c.Request.Context(), sessionID, clientIP, fingerprint)
 		if err != nil {
 			switch e := err.(type) {
-			case *session.BannedError:
-				logger.Warn("被封禁用户访问", "ip", clientIP, "until", e.BannedUntil)
-				c.JSON(http.StatusForbidden, gin.H{
-					"error":        "用户已被封禁",
-					"reason":       e.Reason,
-					"banned_until": e.BannedUntil,
-				})
-				c.Abort()
-				return
-			case *session.CooldownError:
-				logger.Warn("冷却期用户访问", "ip", clientIP, "until", e.CooldownUntil)
-				c.JSON(http.StatusTooManyRequests, gin.H{
-					"error":          "用户处于冷却期",
-					"cooldown_until": e.CooldownUntil,
-				})
-				c.Abort()
-				return
-			default:
-				logger.Error("获取session失败", "error", err, "ip", clientIP)
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "服务暂时不可用"})
-				c.Abort()
-				return
-			}
+		case *session.BannedError:
+			logger.Warn("被封禁用户访问", "ip", clientIP, "until", e.BannedUntil)
+			jsonutil.JSON403(c, gin.H{
+				"error":        "用户已被封禁",
+				"reason":       e.Reason,
+				"banned_until": e.BannedUntil,
+			})
+			c.Abort()
+			return
+		case *session.CooldownError:
+			logger.Warn("冷却期用户访问", "ip", clientIP, "until", e.CooldownUntil)
+			jsonutil.JSON(c, http.StatusTooManyRequests, gin.H{
+				"error":          "用户处于冷却期",
+				"cooldown_until": e.CooldownUntil,
+			})
+			c.Abort()
+			return
+		default:
+			logger.Error("获取session失败", "error", err, "ip", clientIP)
+			jsonutil.JSON500(c, gin.H{"error": "服务暂时不可用"})
+			c.Abort()
+			return
+		}
 		}
 
 		if sessionID == "" || sessionID != sess.ID {
@@ -124,7 +125,7 @@ func GetUserID(c *gin.Context) int64 {
 	if !exists {
 		return 0
 	}
-	return user.ID
+	return int64(user.ID)
 }
 
 func IsAuthenticated(c *gin.Context) bool {
@@ -169,19 +170,19 @@ func RequireActiveUser() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user, exists := GetAnonymousUser(c)
 		if !exists {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "请先访问获取会话"})
+			jsonutil.JSON401(c, gin.H{"error": "请先访问获取会话"})
 			c.Abort()
 			return
 		}
 
 		if user.IsBanned() {
-			c.JSON(http.StatusForbidden, gin.H{"error": "用户已被封禁"})
+			jsonutil.JSON403(c, gin.H{"error": "用户已被封禁"})
 			c.Abort()
 			return
 		}
 
 		if user.IsCooldown() {
-			c.JSON(http.StatusTooManyRequests, gin.H{
+			jsonutil.JSON(c, http.StatusTooManyRequests, gin.H{
 				"error":          "用户处于冷却期",
 				"cooldown_until": user.CooldownUntil,
 			})

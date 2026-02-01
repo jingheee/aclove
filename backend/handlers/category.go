@@ -24,9 +24,12 @@ func (h *CategoryHandler) Create(c *gin.Context) {
 		return
 	}
 
-	if err := h.svc.ValidateParentID(c.Request.Context(), req.ParentID); err != nil {
-		models.JSONBadRequest(c, err.Error())
-		return
+	if req.ParentID != nil {
+		pid := int64(*req.ParentID)
+		if err := h.svc.ValidateParentID(c.Request.Context(), pid); err != nil {
+			models.JSONBadRequest(c, err.Error())
+			return
+		}
 	}
 
 	category, err := h.svc.CreateCategory(c.Request.Context(), &req)
@@ -64,7 +67,8 @@ func (h *CategoryHandler) Update(c *gin.Context) (*models.CategoryResponse, erro
 	}
 
 	if req.ParentID != nil {
-		if err := h.svc.ValidateParentID(c.Request.Context(), req.ParentID); err != nil {
+		pid := int64(*req.ParentID)
+		if err := h.svc.ValidateParentID(c.Request.Context(), pid); err != nil {
 			return nil, err
 		}
 	}
@@ -92,7 +96,6 @@ func (h *CategoryHandler) Delete(c *gin.Context) {
 	models.JSONSuccessWithMsg(c, "删除成功", nil)
 }
 
-
 func (h *CategoryHandler) GetChildren(c *gin.Context) {
 	var parentID *int64
 	if c.Param("id") != "" {
@@ -104,18 +107,31 @@ func (h *CategoryHandler) GetChildren(c *gin.Context) {
 		parentID = &id
 	}
 
-	categories, err := h.svc.GetChildren(c.Request.Context(), parentID)
+	children, err := h.svc.GetChildren(c.Request.Context(), parentID)
 	if err != nil {
-		models.JSONInternalError(c, "查询子分类失败")
+		models.JSONInternalError(c, "获取子分类失败")
 		return
 	}
 
-	response := make([]*models.CategoryResponse, len(categories))
-	for i, category := range categories {
-		response[i] = models.CategoryToResponse(category)
+	models.JSONSuccess(c, models.CategoriesToResponse(children))
+}
+
+func (h *CategoryHandler) List(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+
+	categories, total, err := h.svc.ListCategories(c.Request.Context(), page, pageSize)
+	if err != nil {
+		models.JSONInternalError(c, "获取分类列表失败")
+		return
 	}
 
-	models.JSONSuccess(c, response)
+	models.JSONSuccess(c, gin.H{
+		"items":     models.CategoriesToResponse(categories),
+		"total":     total,
+		"page":      page,
+		"page_size": pageSize,
+	})
 }
 
 func (h *CategoryHandler) GetTree(c *gin.Context) {

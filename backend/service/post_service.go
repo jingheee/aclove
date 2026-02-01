@@ -10,6 +10,7 @@ import (
 	"github.com/redis/rueidis"
 	"gorm.io/datatypes"
 
+	"io.lazydoge/aclove/jsonutil"
 	"io.lazydoge/aclove/logger"
 	"io.lazydoge/aclove/models"
 	"io.lazydoge/aclove/models/query"
@@ -48,7 +49,8 @@ func (s *PostService) CreatePost(ctx context.Context, userID int64, req *models.
 		return nil, err
 	}
 
-	if err := s.validateCategory(ctx, req.CategoryID); err != nil {
+	categoryID := int64(req.CategoryID)
+	if err := s.validateCategory(ctx, categoryID); err != nil {
 		if errors.Is(err, repository.ErrCategoryNotFound) {
 			return nil, ErrCategoryNotFound
 		}
@@ -71,7 +73,7 @@ func (s *PostService) CreatePost(ctx context.Context, userID int64, req *models.
 	post := &models.Post{
 		ID:               models.GenerateSnowflakeID(),
 		UserID:           userID,
-		CategoryID:       req.CategoryID,
+		CategoryID:       categoryID,
 		Title:            req.Title,
 		Content:          req.Content,
 		MediaAttachments: mediaJSON,
@@ -94,7 +96,7 @@ func (s *PostService) CreatePost(ctx context.Context, userID int64, req *models.
 	s.setPostCooldown(ctx, userID)
 	s.incrementDailyPostCount(ctx, userID)
 
-	logger.Info("创建帖子成功", "post_id", post.ID, "user_id", userID, "category_id", req.CategoryID)
+	logger.Info("创建帖子成功", "post_id", post.ID, "user_id", userID, "category_id", categoryID)
 	return post, nil
 }
 
@@ -164,11 +166,12 @@ func (s *PostService) ListPosts(ctx context.Context, query *models.ListPostsQuer
 	var err error
 
 	if query.CategoryID != nil {
-		posts, err = s.postRepo.ListByCategory(ctx, *query.CategoryID, offset, query.PageSize)
+		categoryID := int64(*query.CategoryID)
+		posts, err = s.postRepo.ListByCategory(ctx, categoryID, offset, query.PageSize)
 		if err != nil {
 			return nil, err
 		}
-		total, err = s.postRepo.CountByCategory(ctx, *query.CategoryID)
+		total, err = s.postRepo.CountByCategory(ctx, categoryID)
 	} else {
 		switch query.Sort {
 		case "hot":
@@ -199,7 +202,7 @@ func (s *PostService) ListPosts(ctx context.Context, query *models.ListPostsQuer
 
 	return &models.PostListResponse{
 		Items:    items,
-		Total:    total,
+		Total:    jsonutil.Int64(total),
 		Page:     query.Page,
 		PageSize: query.PageSize,
 	}, nil
