@@ -22,6 +22,7 @@ func Setup(
 	sessionManager *session.Manager,
 	postHandler *handlers.PostHandler,
 	uploadHandler *handlers.UploadHandler,
+	downloadHandler *handlers.DownloadHandler,
 ) {
 	router.GET("/health", func(c *gin.Context) {
 		models.JSONSuccess(c, gin.H{"status": "ok"})
@@ -71,6 +72,10 @@ func Setup(
 			upload.GET("/stats", uploadHandler.GetStats)
 			upload.GET("/health", uploadHandler.HealthCheck)
 		}
+
+		// 通用下载接口
+		api.GET("/download/:id", downloadHandler.Download)
+		api.GET("/attachments/:id", downloadHandler.GetAttachmentInfo)
 	}
 }
 

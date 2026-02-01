@@ -138,9 +138,13 @@ func main() {
 		MaxFileSize:   cfg.Storage.MinIO.MaxFileSize,
 		MaxConcurrent: cfg.Storage.MinIO.MaxConcurrent,
 	})
-	uploadHandler := handlers.NewUploadHandler(storageService)
 
-	routes.Setup(router, categoryHandler, categoryCache, anonymousUserSvc, anonymousUserHandler, sessionManager, postHandler, uploadHandler)
+	// 初始化附件仓库和处理器
+	attachmentRepo := query.NewAttachmentRepo(gormDB)
+	uploadHandler := handlers.NewUploadHandler(storageService, attachmentRepo)
+	downloadHandler := handlers.NewDownloadHandler(attachmentRepo, storageService)
+
+	routes.Setup(router, categoryHandler, categoryCache, anonymousUserSvc, anonymousUserHandler, sessionManager, postHandler, uploadHandler, downloadHandler)
 
 	addr := fmt.Sprintf("%s:%d", cfg.App.Host, cfg.App.Port)
 	logger.Info("服务器启动", "address", addr)
@@ -185,6 +189,24 @@ func initDatabase(db *gorm.DB) error {
 		CREATE INDEX IF NOT EXISTS idx_anonymous_users_cookie ON anonymous_users(cookie);
 		CREATE INDEX IF NOT EXISTS idx_anonymous_users_status ON anonymous_users(status);
 		CREATE INDEX IF NOT EXISTS idx_anonymous_users_deleted_at ON anonymous_users(deleted_at);
+
+		CREATE TABLE IF NOT EXISTS attachments (
+			id BIGINT PRIMARY KEY,
+			user_id BIGINT NOT NULL,
+			filename VARCHAR(255) NOT NULL,
+			size BIGINT NOT NULL,
+			content_type VARCHAR(100) NOT NULL,
+			minio_key VARCHAR(500) NOT NULL UNIQUE,
+			minio_url VARCHAR(500) NOT NULL,
+			file_type VARCHAR(20) NOT NULL DEFAULT 'file',
+			created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+			deleted_at TIMESTAMP WITH TIME ZONE
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_attachments_user_id ON attachments(user_id);
+		CREATE INDEX IF NOT EXISTS idx_attachments_minio_key ON attachments(minio_key);
+		CREATE INDEX IF NOT EXISTS idx_attachments_deleted_at ON attachments(deleted_at);
 	`
 	return db.Exec(createTableSQL).Error
 }

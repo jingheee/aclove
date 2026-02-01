@@ -11,18 +11,21 @@ import (
 	"io.lazydoge/aclove/logger"
 	"io.lazydoge/aclove/middleware"
 	"io.lazydoge/aclove/models"
+	"io.lazydoge/aclove/models/query"
 	"io.lazydoge/aclove/storage/minio"
 )
 
 // UploadHandler 文件上传处理器
 type UploadHandler struct {
 	storageService *minio.Service
+	attachmentRepo *query.AttachmentRepo
 }
 
 // NewUploadHandler 创建上传处理器
-func NewUploadHandler(storageService *minio.Service) *UploadHandler {
+func NewUploadHandler(storageService *minio.Service, attachmentRepo *query.AttachmentRepo) *UploadHandler {
 	return &UploadHandler{
 		storageService: storageService,
+		attachmentRepo: attachmentRepo,
 	}
 }
 
@@ -74,11 +77,29 @@ func (h *UploadHandler) UploadImage(c *gin.Context) {
 		return
 	}
 
+	// 记录附件信息到数据库
+	attachment := &query.AttachmentDO{
+		ID:          models.GenerateSnowflakeID(),
+		UserID:      int64(user.ID),
+		Filename:    result.Filename,
+		Size:        int64(result.Size),
+		ContentType: result.ContentType,
+		MinioKey:    result.Key,
+		MinioURL:    result.URL,
+		FileType:    "image",
+	}
+
+	if err := h.attachmentRepo.Create(c.Request.Context(), attachment); err != nil {
+		logger.Error("记录附件信息失败", "error", err, "user_id", int64(user.ID), "filename", header.Filename)
+		// 记录失败不影响上传结果，继续返回成功
+	}
+
 	logger.Info("图片上传成功",
 		"user_id", user.ID,
 		"filename", header.Filename,
 		"size", result.Size,
 		"url", result.URL,
+		"attachment_id", attachment.ID,
 	)
 
 	models.JSONSuccess(c, gin.H{
@@ -87,6 +108,8 @@ func (h *UploadHandler) UploadImage(c *gin.Context) {
 		"size":         result.Size,
 		"content_type": result.ContentType,
 		"filename":     result.Filename,
+		"attachment_id": attachment.ID,
+		"download_url": "/api/download/" + fmt.Sprintf("%d", attachment.ID),
 	})
 }
 
@@ -131,19 +154,39 @@ func (h *UploadHandler) UploadFile(c *gin.Context) {
 		return
 	}
 
+	// 记录附件信息到数据库
+	attachment := &query.AttachmentDO{
+		ID:          models.GenerateSnowflakeID(),
+		UserID:      int64(user.ID),
+		Filename:    result.Filename,
+		Size:        int64(result.Size),
+		ContentType: result.ContentType,
+		MinioKey:    result.Key,
+		MinioURL:    result.URL,
+		FileType:    "file",
+	}
+
+	if err := h.attachmentRepo.Create(c.Request.Context(), attachment); err != nil {
+		logger.Error("记录附件信息失败", "error", err, "user_id", int64(user.ID), "filename", header.Filename)
+		// 记录失败不影响上传结果，继续返回成功
+	}
+
 	logger.Info("文件上传成功",
 		"user_id", user.ID,
 		"filename", header.Filename,
 		"size", result.Size,
 		"url", result.URL,
+		"attachment_id", attachment.ID,
 	)
 
 	models.JSONSuccess(c, gin.H{
-		"url":          result.URL,
-		"key":          result.Key,
-		"size":         result.Size,
-		"content_type": result.ContentType,
-		"filename":     result.Filename,
+		"url":           result.URL,
+		"key":           result.Key,
+		"size":          result.Size,
+		"content_type":  result.ContentType,
+		"filename":      result.Filename,
+		"attachment_id": attachment.ID,
+		"download_url":  "/api/download/" + fmt.Sprintf("%d", attachment.ID),
 	})
 }
 

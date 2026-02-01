@@ -158,6 +158,11 @@ func (s *Service) DeleteFile(ctx context.Context, fileURL string) error {
 	return s.client.DeleteByURL(ctx, fileURL)
 }
 
+// Download 下载文件
+func (s *Service) Download(ctx context.Context, key string) (io.ReadCloser, int64, error) {
+	return s.client.Download(ctx, key)
+}
+
 // GetStats 获取存储统计
 func (s *Service) GetStats() map[string]interface{} {
 	return map[string]interface{}{
@@ -171,7 +176,10 @@ func (s *Service) upload(ctx context.Context, filename string, content io.Reader
 	s.uploadSem <- struct{}{}
 	defer func() { <-s.uploadSem }()
 
-	resp, err := s.client.Upload(ctx, filename, content, size, contentType)
+	// 生成唯一的存储key
+	key := s.client.GenerateKey(filename)
+
+	resp, err := s.client.Upload(ctx, key, content, size, contentType)
 	if err != nil {
 		return nil, err
 	}

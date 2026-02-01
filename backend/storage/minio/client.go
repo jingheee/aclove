@@ -280,10 +280,8 @@ func (c *Client) GetPresignedURL(ctx context.Context, key string, expiry time.Du
 }
 
 // Download 下载文件
+// 注意：返回的ReadCloser需要在读取完成后由调用方关闭
 func (c *Client) Download(ctx context.Context, key string) (io.ReadCloser, int64, error) {
-	ctx, cancel := context.WithTimeout(ctx, defaultTimeout)
-	defer cancel()
-
 	result, err := c.s3Client.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(c.bucket),
 		Key:    aws.String(key),
