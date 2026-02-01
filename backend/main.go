@@ -6,16 +6,23 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/gin-contrib/cors"
+	"github.com/gin-gonic/gin"
+	"github.com/redis/rueidis"
+	"gorm.io/gorm"
+
+	"io.lazydoge/aclove/cache"
 	"io.lazydoge/aclove/config"
 	"io.lazydoge/aclove/database"
 	"io.lazydoge/aclove/handlers"
+	"io.lazydoge/aclove/jsonutil"
 	"io.lazydoge/aclove/logger"
+	"io.lazydoge/aclove/models/query"
 	"io.lazydoge/aclove/repository"
 	"io.lazydoge/aclove/routes"
 	"io.lazydoge/aclove/service"
-
-	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
+	"io.lazydoge/aclove/session"
+	"io.lazydoge/aclove/storage/minio"
 )
 
 func main() {
@@ -41,13 +48,103 @@ func main() {
 		logger.Fatal("初始化数据库失败", "error", err)
 	}
 
+	jsonutil.EnableCustomJSONBinding()
 	router := gin.Default()
+
+	corsConfig := cors.DefaultConfig()
+	corsConfig.AllowOrigins = []string{"*"}
+	corsConfig.AllowMethods = []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"}
+	corsConfig.AllowHeaders = []string{"Origin", "Content-Type", "Accept", "Authorization", "X-Device-Fingerprint"}
+	corsConfig.ExposeHeaders = []string{"Content-Length"}
+	corsConfig.AllowCredentials = true
+	router.Use(cors.New(corsConfig))
 
 	categoryRepo := repository.NewCategoryRepository(gormDB)
 	categorySvc := service.NewCategoryService(categoryRepo)
 	categoryHandler := handlers.NewCategoryHandler(categorySvc)
 
-	routes.Setup(router, categoryHandler)
+	anonymousUserRepo := query.NewAnonymousUserRepo(gormDB)
+	anonymousUserSvc := service.NewAnonymousUserService(anonymousUserRepo)
+	anonymousUserHandler := handlers.NewAnonymousUserHandler(anonymousUserSvc)
+
+	postRepo := query.NewPostRepo(gormDB)
+
+	var categoryCache *cache.Cache
+	var sessionManager *session.Manager
+	var redisClient rueidis.Client
+
+	if cfg.Redis.Addr != "" {
+		categoryCache, err = cache.New(cache.Config{
+			Addr:        cfg.Redis.Addr,
+			Password:    cfg.Redis.Password,
+			DB:          cfg.Redis.DB,
+			Prefix:      cfg.Redis.CachePrefix,
+			DefaultTTLD: cfg.Redis.CacheTTL,
+		})
+		if err != nil {
+			logger.Warn("连接Redis失败，缓存功能不可用", "error", err)
+			categoryCache = nil
+		}
+
+		redisClient, err = rueidis.NewClient(rueidis.ClientOption{
+			InitAddress: []string{cfg.Redis.Addr},
+			Password:    cfg.Redis.Password,
+			SelectDB:    cfg.Redis.DB,
+		})
+		if err != nil {
+			logger.Warn("连接Redis客户端失败", "error", err)
+		}
+
+		sessionManager, err = session.NewManager(anonymousUserRepo, session.ManagerConfig{
+			StoreConfig: session.StoreConfig{
+				RedisAddr:       cfg.Redis.Addr,
+				RedisPassword:   cfg.Redis.Password,
+				RedisDB:         cfg.Redis.DB,
+				KeyPrefix:       cfg.Redis.SessionPrefix,
+				SessionTTL:      cfg.Redis.SessionTTL,
+				CleanupInterval: cfg.Redis.SessionCleanupInterval,
+			},
+			CookieName:     cfg.Session.CookieName,
+			CookieDomain:   cfg.Session.CookieDomain,
+			CookieSecure:   cfg.Session.CookieSecure,
+			CookieHttpOnly: cfg.Session.CookieHttpOnly,
+			CookieSameSite: cfg.Session.CookieSameSite,
+		})
+		if err != nil {
+			logger.Fatal("创建Session Manager失败", "error", err)
+		}
+		defer sessionManager.Close()
+	} else {
+		logger.Fatal("Redis配置不能为空，分布式session需要Redis支持")
+	}
+
+	postSvc := service.NewPostService(postRepo, categoryRepo, redisClient)
+	postHandler := handlers.NewPostHandler(postSvc)
+
+	// Initialize MinIO storage
+	minioClient, err := minio.NewClient(minio.Config{
+		Endpoint:        cfg.Storage.MinIO.Endpoint,
+		Bucket:          cfg.Storage.MinIO.Bucket,
+		AccessKeyID:     cfg.Storage.MinIO.AccessKeyID,
+		SecretAccessKey: cfg.Storage.MinIO.SecretAccessKey,
+		Region:          cfg.Storage.MinIO.Region,
+		PublicURL:       cfg.Storage.MinIO.PublicURL,
+	})
+	if err != nil {
+		logger.Fatal("创建MinIO客户端失败", "error", err)
+	}
+	storageService := minio.NewService(minio.ServiceConfig{
+		Client:        minioClient,
+		MaxFileSize:   cfg.Storage.MinIO.MaxFileSize,
+		MaxConcurrent: cfg.Storage.MinIO.MaxConcurrent,
+	})
+
+	// 初始化附件仓库和处理器
+	attachmentRepo := query.NewAttachmentRepo(gormDB)
+	uploadHandler := handlers.NewUploadHandler(storageService, attachmentRepo)
+	downloadHandler := handlers.NewDownloadHandler(attachmentRepo, storageService)
+
+	routes.Setup(router, categoryHandler, categoryCache, anonymousUserSvc, anonymousUserHandler, sessionManager, postHandler, uploadHandler, downloadHandler)
 
 	addr := fmt.Sprintf("%s:%d", cfg.App.Host, cfg.App.Port)
 	logger.Info("服务器启动", "address", addr)
@@ -61,6 +158,8 @@ func main() {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
+
+	logger.Info("服务器正在关闭")
 }
 
 func initDatabase(db *gorm.DB) error {
@@ -72,6 +171,42 @@ func initDatabase(db *gorm.DB) error {
 		);
 		
 		CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at DESC);
+
+		CREATE TABLE IF NOT EXISTS anonymous_users (
+			id BIGSERIAL PRIMARY KEY,
+			cookie VARCHAR(64) NOT NULL UNIQUE,
+			fingerprint_hash VARCHAR(128),
+			ip VARCHAR(45) NOT NULL,
+			status VARCHAR(20) DEFAULT 'active',
+			status_reason TEXT,
+			banned_until TIMESTAMP WITH TIME ZONE,
+			cooldown_until TIMESTAMP WITH TIME ZONE,
+			created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+			deleted_at TIMESTAMP WITH TIME ZONE
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_anonymous_users_cookie ON anonymous_users(cookie);
+		CREATE INDEX IF NOT EXISTS idx_anonymous_users_status ON anonymous_users(status);
+		CREATE INDEX IF NOT EXISTS idx_anonymous_users_deleted_at ON anonymous_users(deleted_at);
+
+		CREATE TABLE IF NOT EXISTS attachments (
+			id BIGINT PRIMARY KEY,
+			user_id BIGINT NOT NULL,
+			filename VARCHAR(255) NOT NULL,
+			size BIGINT NOT NULL,
+			content_type VARCHAR(100) NOT NULL,
+			minio_key VARCHAR(500) NOT NULL UNIQUE,
+			minio_url VARCHAR(500) NOT NULL,
+			file_type VARCHAR(20) NOT NULL DEFAULT 'file',
+			created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+			deleted_at TIMESTAMP WITH TIME ZONE
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_attachments_user_id ON attachments(user_id);
+		CREATE INDEX IF NOT EXISTS idx_attachments_minio_key ON attachments(minio_key);
+		CREATE INDEX IF NOT EXISTS idx_attachments_deleted_at ON attachments(deleted_at);
 	`
 	return db.Exec(createTableSQL).Error
 }
